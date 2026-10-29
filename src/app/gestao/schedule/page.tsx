@@ -7,12 +7,11 @@ import { fmtShort, fmtTime, localeOf } from "@/lib/format";
 import type { ServiceRow } from "@/lib/booking";
 import { saveService, saveHours, toggleDayLock, saveLock, removeLock } from "@/app/gestao/actions";
 import { dayBounds, monthRange, BOOKING_TZ } from "@/lib/tz";
+import ActionForm from "@/components/action-form";
 import AdminNav from "@/components/admin-nav";
-import Flash from "@/components/flash";
 import SetupNotice from "@/components/setup-notice";
 
 const pad = (n: number) => String(n).padStart(2, "0");
-const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 function prevMonth(m: string): string {
   const [y, mo] = m.split("-").map(Number);
@@ -30,7 +29,7 @@ interface LockRow {
   reason: string | null;
 }
 
-export default async function AdminSchedule({ searchParams }: { searchParams: Promise<{ m?: string; msg?: string; d?: string }> }) {
+export default async function AdminSchedule({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
   const sp = await searchParams;
   const month = sp.m && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.m)
     ? sp.m
@@ -83,20 +82,19 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
   return (
     <main className="mx-auto w-full max-w-2xl px-6 pt-12 pb-16">
       <AdminNav t={t} lang={lang} active="setup" />
-      <Flash msg={sp.msg} d={sp.d} t={t} />
 
       {/* ----- services ----- */}
       <section className="mt-12">
         <h2 className="label">{t.services}</h2>
         <div className="mt-4 flex flex-col gap-4">
           {services.map((s) => (
-            <form
+            <ActionForm
               key={s.id}
               action={saveService}
+              lang={lang}
               className="grid grid-cols-2 gap-3 rounded-2xl border border-line bg-panel p-4 sm:grid-cols-[1fr_1fr_5.5rem_4rem_auto] sm:items-end"
             >
               <input type="hidden" name="id" value={s.id} />
-              <input type="hidden" name="month" value={month} />
               <label className="block">
                 <span className="label">{t.namePt}</span>
                 <input name="name_pt" defaultValue={s.name_pt} required maxLength={80} className="input mt-1.5" />
@@ -125,14 +123,14 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
               <button type="submit" className="btn btn-sm">
                 {t.save}
               </button>
-            </form>
+            </ActionForm>
           ))}
-          <form
+          <ActionForm
             action={saveService}
+            lang={lang}
             className="grid grid-cols-2 gap-3 rounded-2xl border border-dashed border-line p-4 sm:grid-cols-[1fr_1fr_5.5rem_4rem_auto] sm:items-end"
           >
             <input type="hidden" name="id" value="" />
-            <input type="hidden" name="month" value={month} />
             <label className="block">
               <span className="label">{t.namePt}</span>
               <input name="name_pt" required maxLength={80} className="input mt-1.5" />
@@ -152,15 +150,14 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
             <button type="submit" className="btn btn-sm btn-primary">
               {t.addService}
             </button>
-          </form>
+          </ActionForm>
         </div>
       </section>
 
       {/* ----- weekly hours ----- */}
       <section className="mt-16">
         <h2 className="label">{t.hours}</h2>
-        <form action={saveHours} className="mt-4 rounded-2xl border border-line bg-panel p-4 sm:p-6">
-          <input type="hidden" name="month" value={month} />
+        <ActionForm action={saveHours} lang={lang} className="mt-4 rounded-2xl border border-line bg-panel p-4 sm:p-6">
           <div className="divide-y divide-line">
             {Array.from({ length: 7 }, (_, dow) => {
               const day = hours.get(dow);
@@ -195,7 +192,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
           <button type="submit" className="btn btn-sm btn-primary mt-4">
             {t.saveHours}
           </button>
-        </form>
+        </ActionForm>
       </section>
 
       {/* ----- lock calendar ----- */}
@@ -224,9 +221,8 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
             const date = `${month}-${pad(i + 1)}`;
             const st = stateFor(date);
             return (
-              <form key={date} action={toggleDayLock}>
+              <ActionForm key={date} action={toggleDayLock} lang={lang} hideSuccess className="inline-block">
                 <input type="hidden" name="date" value={date} />
-                <input type="hidden" name="month" value={month} />
                 <button
                   type="submit"
                   title={st === "full" ? t.locked : st === "partial" ? t.lockedPartial : undefined}
@@ -241,7 +237,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
                 >
                   {i + 1}
                 </button>
-              </form>
+              </ActionForm>
             );
           })}
         </div>
@@ -251,8 +247,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
         </p>
 
         {/* block a partial period */}
-        <form action={saveLock} className="mt-6 flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-panel p-4 sm:p-6">
-          <input type="hidden" name="month" value={month} />
+        <ActionForm action={saveLock} lang={lang} className="mt-6 flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-panel p-4 sm:p-6">
           <label className="block">
             <span className="label">{t.addLock}</span>
             <input type="date" name="date" required className="input mt-1.5" />
@@ -262,7 +257,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
           <button type="submit" className="btn btn-sm btn-primary">
             {t.save}
           </button>
-        </form>
+        </ActionForm>
 
         {/* existing locks this month */}
         {monthLocks.length === 0 ? (
@@ -280,13 +275,12 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
                     </>
                   )}
                 </span>
-                <form action={removeLock}>
+                <ActionForm action={removeLock} lang={lang} hideSuccess className="inline">
                   <input type="hidden" name="id" value={r.id} />
-                  <input type="hidden" name="month" value={month} />
                   <button type="submit" className="text-sm text-soft underline decoration-line underline-offset-4 hover:text-ink">
                     {t.unlock}
                   </button>
-                </form>
+                </ActionForm>
               </li>
             ))}
           </ul>

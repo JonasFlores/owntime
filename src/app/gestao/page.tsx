@@ -7,15 +7,10 @@ import { fmtShort, fmtTime, localeOf } from "@/lib/format";
 import { serviceName, type AppointmentRow } from "@/lib/booking";
 import { decide } from "@/app/gestao/actions";
 import AdminNav from "@/components/admin-nav";
-import Flash from "@/components/flash";
+import ActionForm from "@/components/action-form";
 import SetupNotice from "@/components/setup-notice";
 
-export default async function AdminBookings({
-  searchParams,
-}: {
-  searchParams: Promise<{ msg?: string; d?: string }>;
-}) {
-  const sp = await searchParams;
+export default async function AdminBookings() {
   const lang = await getLang();
   const t = dict[lang];
   const locale = localeOf(lang);
@@ -25,7 +20,6 @@ export default async function AdminBookings({
     return (
       <main className="mx-auto w-full max-w-2xl px-6 pt-12 pb-8">
         <AdminNav t={t} lang={lang} active="bookings" />
-        <Flash msg={sp.msg} d={sp.d} t={t} />
         <h1 className="mt-10 font-serif text-3xl">{t.tabBookings}</h1>
         <SetupNotice />
       </main>
@@ -74,21 +68,21 @@ export default async function AdminBookings({
         {t.createdLbl} {fmtShort(x.created_at, lang)} {new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", timeZone: process.env.APPOINTMENT_TIMEZONE }).format(new Date(x.created_at))}
       </p>
       {actions && (
-        <div className="mt-3 flex gap-2">
-          <form action={decide}>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <ActionForm action={decide} lang={lang} className="inline-flex" hideSuccess>
             <input type="hidden" name="id" value={x.id} />
             <input type="hidden" name="status" value="approved" />
             <button type="submit" className="btn btn-sm btn-primary">
               {t.approve}
             </button>
-          </form>
-          <form action={decide}>
+          </ActionForm>
+          <ActionForm action={decide} lang={lang} className="inline-flex" hideSuccess>
             <input type="hidden" name="id" value={x.id} />
             <input type="hidden" name="status" value="rejected" />
             <button type="submit" className="btn btn-sm">
               {t.reject}
             </button>
-          </form>
+          </ActionForm>
         </div>
       )}
     </li>
@@ -112,7 +106,6 @@ export default async function AdminBookings({
   return (
     <main className="mx-auto w-full max-w-2xl px-6 pt-12 pb-8">
       <AdminNav t={t} lang={lang} active="bookings" />
-      <Flash msg={sp.msg} d={sp.d} t={t} />
       <Section title={t.pending} list={pending} actions />
       <Section title={t.approvedUp} list={approved} actions={false} />
       <Section title={t.history} list={history} actions={false} />
