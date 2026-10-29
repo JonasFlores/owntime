@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { signOut } from "@/app/admin/actions";
+import { signOut } from "@/app/gestao/actions";
 import type { Dict, Lang } from "@/lib/i18n";
 
 export default function AdminNav({ t, lang, active }: { t: Dict; lang: Lang; active: "bookings" | "setup" | "login" }) {
@@ -8,13 +8,13 @@ export default function AdminNav({ t, lang, active }: { t: Dict; lang: Lang; act
   return (
     <nav className="flex items-center gap-6">
       <Link
-        href="/admin"
+        href="/gestao"
         className={active === "bookings" ? `${base} border-ink text-ink` : `${base} border-transparent text-soft hover:text-ink`}
       >
         {t.tabBookings}
       </Link>
       <Link
-        href="/admin/schedule"
+        href="/gestao/schedule"
         className={active === "setup" ? `${base} border-ink text-ink` : `${base} border-transparent text-soft hover:text-ink`}
       >
         {t.tabSetup}

@@ -28,5 +28,5 @@ Current flow (2025/2026): hPanel no longer uses the old Passenger "Advanced → 
 - [ ] GitHub repo connected in hPanel
 - [ ] Env vars saved (project redeploys on save)
 - [ ] Supabase project created + `supabase/schema.sql` executed in the SQL editor
-- [ ] Admin(s) signed up on `/admin/login` and inserted into `admin_users`
+- [ ] Admin(s) signed up on `/gestao/login` and inserted into `admin_users`
 - [ ] Test booking → approve → verify slot becomes unavailable

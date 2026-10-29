@@ -23,6 +23,6 @@ cp .env.example .env.local   # fill in your Supabase URL + anon key
 npm run dev
 ```
 
-Then: run `supabase/schema.sql` in the Supabase SQL editor, sign up on `/admin/login`,
+Then: run `supabase/schema.sql` in the Supabase SQL editor, sign up on `/gestao/login`,
 and add your `user_id` to `admin_users` (final step documented in the schema file).
 

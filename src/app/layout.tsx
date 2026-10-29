@@ -41,9 +41,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </nav>
         </header>
         <div className="flex-1">{children}</div>
-        <footer className="mx-auto w-full max-w-2xl px-6 pt-16 pb-10 text-[13px] text-soft">
+        <footer className="mx-auto w-full max-w-2xl px-6 pt-16 pb-10 text-xs text-soft">
           © {new Date().getFullYear()} ·{" "}
-          <Link href="/admin/login" className="underline decoration-line underline-offset-4 hover:text-ink">
+          <Link href="/gestao/login" className="underline decoration-line underline-offset-4 hover:text-ink">
             admin
           </Link>
         </footer>

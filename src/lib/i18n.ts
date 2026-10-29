@@ -72,6 +72,13 @@ const en = {
   prevM: "Previous month",
   nextM: "Next month",
   today: "Today",
+  // flash messages
+  msgSaved: "Changes saved.",
+  msgApproved: "Request approved — the time is now reserved.",
+  msgDeclined: "Request declined — the time is free again.",
+  msgLocked: "Day blocked.",
+  msgUnlocked: "Block removed.",
+  msgError: "Could not save. Please try again.",
 };
 
 export const dict: { pt: typeof en; en: typeof en } = {
@@ -146,6 +153,12 @@ export const dict: { pt: typeof en; en: typeof en } = {
     prevM: "Mês anterior",
     nextM: "Mês seguinte",
     today: "Hoje",
+    msgSaved: "Alterações salvas.",
+    msgApproved: "Pedido aprovado — o horário agora está reservado.",
+    msgDeclined: "Pedido recusado — o horário voltou a ficar livre.",
+    msgLocked: "Dia bloqueado.",
+    msgUnlocked: "Bloqueio removido.",
+    msgError: "Não foi possível salvar. Tente novamente.",
   },
 };
 

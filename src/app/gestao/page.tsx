@@ -5,11 +5,17 @@ import { getLang } from "@/lib/lang";
 import { dict } from "@/lib/i18n";
 import { fmtShort, fmtTime, localeOf } from "@/lib/format";
 import { serviceName, type AppointmentRow } from "@/lib/booking";
-import { decide } from "@/app/admin/actions";
+import { decide } from "@/app/gestao/actions";
 import AdminNav from "@/components/admin-nav";
+import Flash from "@/components/flash";
 import SetupNotice from "@/components/setup-notice";
 
-export default async function AdminBookings() {
+export default async function AdminBookings({
+  searchParams,
+}: {
+  searchParams: Promise<{ msg?: string; d?: string }>;
+}) {
+  const sp = await searchParams;
   const lang = await getLang();
   const t = dict[lang];
   const locale = localeOf(lang);
@@ -19,6 +25,7 @@ export default async function AdminBookings() {
     return (
       <main className="mx-auto w-full max-w-2xl px-6 pt-12 pb-8">
         <AdminNav t={t} lang={lang} active="bookings" />
+        <Flash msg={sp.msg} d={sp.d} t={t} />
         <h1 className="mt-10 font-serif text-3xl">{t.tabBookings}</h1>
         <SetupNotice />
       </main>
@@ -105,6 +112,7 @@ export default async function AdminBookings() {
   return (
     <main className="mx-auto w-full max-w-2xl px-6 pt-12 pb-8">
       <AdminNav t={t} lang={lang} active="bookings" />
+      <Flash msg={sp.msg} d={sp.d} t={t} />
       <Section title={t.pending} list={pending} actions />
       <Section title={t.approvedUp} list={approved} actions={false} />
       <Section title={t.history} list={history} actions={false} />

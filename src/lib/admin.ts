@@ -11,8 +11,8 @@ export async function requireAdmin(): Promise<{ sb: SupabaseClient; user: User }
   const {
     data: { user },
   } = await sb.auth.getUser();
-  if (!user) redirect("/admin/login");
+  if (!user) redirect("/gestao/login");
   const { data: row } = await sb.from("admin_users").select("user_id").eq("user_id", user.id).maybeSingle();
-  if (!row) redirect("/admin/login?error=denied");
+  if (!row) redirect("/gestao/login?error=denied");
   return { sb, user };
 }

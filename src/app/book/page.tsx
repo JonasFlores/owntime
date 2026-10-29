@@ -30,7 +30,7 @@ export default async function BookPage({
               <li key={x.id}>
                 <Link href={`/book?service=${x.id}`} className="flex items-baseline justify-between py-4">
                   <span className="font-serif text-lg">{serviceName(x, lang)}</span>
-                  <span className="label">{x.duration_minutes} {t.minutes} →</span>
+                  <span className="label">{x.duration_minutes} {t.minutes}</span>
                 </Link>
               </li>
             ))}

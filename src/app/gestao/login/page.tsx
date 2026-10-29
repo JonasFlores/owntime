@@ -1,7 +1,7 @@
 import { getLang } from "@/lib/lang";
 import { dict } from "@/lib/i18n";
 import { isConfigured } from "@/lib/supabase";
-import { signIn } from "@/app/admin/actions";
+import { signIn } from "@/app/gestao/actions";
 
 export default async function LoginPage({
   searchParams,

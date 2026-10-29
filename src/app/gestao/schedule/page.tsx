@@ -5,9 +5,10 @@ import { getLang } from "@/lib/lang";
 import { dict } from "@/lib/i18n";
 import { fmtShort, fmtTime, localeOf } from "@/lib/format";
 import type { ServiceRow } from "@/lib/booking";
-import { saveService, saveHours, toggleDayLock, saveLock, removeLock } from "@/app/admin/actions";
+import { saveService, saveHours, toggleDayLock, saveLock, removeLock } from "@/app/gestao/actions";
 import { dayBounds, monthRange, BOOKING_TZ } from "@/lib/tz";
 import AdminNav from "@/components/admin-nav";
+import Flash from "@/components/flash";
 import SetupNotice from "@/components/setup-notice";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -29,7 +30,7 @@ interface LockRow {
   reason: string | null;
 }
 
-export default async function AdminSchedule({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
+export default async function AdminSchedule({ searchParams }: { searchParams: Promise<{ m?: string; msg?: string; d?: string }> }) {
   const sp = await searchParams;
   const month = sp.m && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.m)
     ? sp.m
@@ -82,6 +83,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
   return (
     <main className="mx-auto w-full max-w-2xl px-6 pt-12 pb-16">
       <AdminNav t={t} lang={lang} active="setup" />
+      <Flash msg={sp.msg} d={sp.d} t={t} />
 
       {/* ----- services ----- */}
       <section className="mt-12">
@@ -94,6 +96,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
               className="grid grid-cols-2 gap-3 rounded-2xl border border-line bg-panel p-4 sm:grid-cols-[1fr_1fr_5.5rem_4rem_auto] sm:items-end"
             >
               <input type="hidden" name="id" value={s.id} />
+              <input type="hidden" name="month" value={month} />
               <label className="block">
                 <span className="label">{t.namePt}</span>
                 <input name="name_pt" defaultValue={s.name_pt} required maxLength={80} className="input mt-1.5" />
@@ -129,6 +132,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
             className="grid grid-cols-2 gap-3 rounded-2xl border border-dashed border-line p-4 sm:grid-cols-[1fr_1fr_5.5rem_4rem_auto] sm:items-end"
           >
             <input type="hidden" name="id" value="" />
+            <input type="hidden" name="month" value={month} />
             <label className="block">
               <span className="label">{t.namePt}</span>
               <input name="name_pt" required maxLength={80} className="input mt-1.5" />
@@ -156,6 +160,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
       <section className="mt-16">
         <h2 className="label">{t.hours}</h2>
         <form action={saveHours} className="mt-4 rounded-2xl border border-line bg-panel p-4 sm:p-6">
+          <input type="hidden" name="month" value={month} />
           <div className="divide-y divide-line">
             {Array.from({ length: 7 }, (_, dow) => {
               const day = hours.get(dow);
@@ -197,7 +202,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
       <section className="mt-16">
         <h2 className="label">{t.locks}</h2>
         <div className="mt-5 flex items-center justify-between">
-          <Link href={`/admin/schedule?m=${prevMonth(month)}`} className="text-sm text-soft hover:text-ink">
+          <Link href={`/gestao/schedule?m=${prevMonth(month)}`} className="text-sm text-soft hover:text-ink">
             ‹ {t.prevM}
           </Link>
           <p className="font-serif text-lg">
@@ -205,7 +210,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
               new Date(`${month}-01T12:00:00Z`),
             )}
           </p>
-          <Link href={`/admin/schedule?m=${nextMonth(month)}`} className="text-sm text-soft hover:text-ink">
+          <Link href={`/gestao/schedule?m=${nextMonth(month)}`} className="text-sm text-soft hover:text-ink">
             {t.nextM} ›
           </Link>
         </div>
@@ -221,6 +226,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
             return (
               <form key={date} action={toggleDayLock}>
                 <input type="hidden" name="date" value={date} />
+                <input type="hidden" name="month" value={month} />
                 <button
                   type="submit"
                   title={st === "full" ? t.locked : st === "partial" ? t.lockedPartial : undefined}
@@ -246,6 +252,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
 
         {/* block a partial period */}
         <form action={saveLock} className="mt-6 flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-panel p-4 sm:p-6">
+          <input type="hidden" name="month" value={month} />
           <label className="block">
             <span className="label">{t.addLock}</span>
             <input type="date" name="date" required className="input mt-1.5" />
@@ -275,6 +282,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
                 </span>
                 <form action={removeLock}>
                   <input type="hidden" name="id" value={r.id} />
+                  <input type="hidden" name="month" value={month} />
                   <button type="submit" className="text-sm text-soft underline decoration-line underline-offset-4 hover:text-ink">
                     {t.unlock}
                   </button>

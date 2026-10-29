@@ -32,7 +32,7 @@ export default async function Home() {
                   {serviceName(s, lang)}
                 </span>
                 <span className="label shrink-0 pl-4 transition-colors group-hover:text-accent">
-                  {s.duration_minutes} {t.minutes} →
+                  {s.duration_minutes} {t.minutes}
                 </span>
               </Link>
             </li>

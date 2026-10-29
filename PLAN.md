@@ -72,9 +72,9 @@ Everything else is enforced with **Row Level Security**:
 / (lang from cookie or ?lang=)
   └─ services list → /book?service=…&date=…&slot=…   (calendar + slot picker + request form)
 /thanks (after submit)
-/admin/login          Supabase Auth
-/admin                pending requests (approve / reject with reason)
-/admin/schedule       working hours + time off + service management
+/gestao/login          Supabase Auth (hidden admin path — folder name doubles as the secret)
+/gestao                pending requests (approve / reject with reason)
+/gestao/schedule       working hours + time off + service management
 ```
 
 ## 6. Security checklist
