@@ -1,7 +1,7 @@
 export type Lang = "pt" | "en";
 
 const en = {
-  brand: "Studio",
+  brand: "Owntime",
   // public
   homeEyebrow: "Schedule",
   homeTitle: "Reserve your time",
@@ -77,7 +77,7 @@ const en = {
 export const dict: { pt: typeof en; en: typeof en } = {
   en,
   pt: {
-    brand: "Estúdio",
+    brand: "Owntime",
     homeEyebrow: "Agenda",
     homeTitle: "Reserve o seu horário",
     homeIntro:

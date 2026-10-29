@@ -5,7 +5,7 @@ import { getLang } from "@/lib/lang";
 import { dict } from "@/lib/i18n";
 
 export const metadata: Metadata = {
-  title: "Estúdio · Agenda",
+  title: "Owntime · Agenda",
   description: "Faça sua reserva online — choose a time, we confirm it.",
 };
 

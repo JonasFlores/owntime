@@ -1,4 +1,4 @@
-# Vibecoding — Online Appointment Scheduler
+# Owntime — Online Appointment Scheduler
 
 Public booking site + small admin team, running on Hostinger Cloud Startup, backed by Supabase.
 

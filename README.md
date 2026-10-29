@@ -1,4 +1,4 @@
-# Vibecoding — appointment scheduler
+# Owntime — appointment scheduler
 
 Online appointment booking: guests request a slot, admin team approves/rejects, approved slots become unavailable.
 
