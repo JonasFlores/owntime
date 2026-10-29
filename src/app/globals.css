@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #faf8f4;
+  --color-panel: #fffefb;
+  --color-ink: #201b16;
+  --color-soft: #82796e;
+  --color-line: #e8e1d5;
+  --color-accent: #2f5240;
+  --color-warn: #8a3b2e;
+
+  --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+::selection {
+  background: #d9e4dd;
+}
+
+@layer components {
+  .label {
+    @apply text-[11px] font-medium uppercase tracking-[0.22em] text-soft;
+  }
+  .btn {
+    @apply inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-full border border-ink/20 px-6 text-sm font-medium whitespace-nowrap text-ink transition-colors hover:border-ink disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply border-ink bg-ink text-paper hover:border-accent hover:bg-accent;
+  }
+  .btn-sm {
+    @apply h-9 px-4 text-[13px];
+  }
+  .input {
+    @apply h-11 w-full rounded-lg border border-line bg-panel px-3 text-sm text-ink outline-none placeholder:text-soft/60 focus:border-ink/50;
+  }
+}

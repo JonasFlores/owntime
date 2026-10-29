@@ -8,9 +8,21 @@ See [`PLAN.md`](./PLAN.md) for the full plan, data model, security checklist and
 
 ## Status
 - [x] Plan agreed
-- [ ] Phase 0 — repo setup
-- [ ] Phase 1 — Supabase backend
-- [ ] Phase 2 — public booking site
-- [ ] Phase 3 — admin dashboard
-- [ ] Phase 4 — notifications & hardening
-- [ ] Phase 5 — Hostinger deploy
+- [x] Phase 0 — repo setup (Next.js 15 + Tailwind v4 + Supabase SDK + zod + dayjs)
+- [x] Phase 1 — Supabase backend (`supabase/schema.sql` — run it in the Supabase SQL editor)
+- [x] Phase 2 — public booking site (calendar → free days → times → request form, PT/EN)
+- [x] Phase 3 — admin dashboard (bookings, services, weekly hours, day/period blocks)
+- [ ] Phase 4 — notifications & hardening (Resend emails, rate-limit tuning, RLS review)
+- [ ] Phase 5 — Hostinger deploy (see `DEPLOY.md`)
+
+## Getting started (local)
+
+```bash
+npm install
+cp .env.example .env.local   # fill in your Supabase URL + anon key
+npm run dev
+```
+
+Then: run `supabase/schema.sql` in the Supabase SQL editor, sign up on `/admin/login`,
+and add your `user_id` to `admin_users` (final step documented in the schema file).
+
