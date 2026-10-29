@@ -46,6 +46,8 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
       { open: r.open, start_time: r.start_time, end_time: r.end_time },
     ]),
   );
+  // weekdays with no open hours are inactive in the lock calendar
+  const closedDows = [0, 1, 2, 3, 4, 5, 6].filter((d) => !hours.get(d)?.open);
   const locks = (to.data ?? []) as { id: string; starts_at: string; ends_at: string; reason: string | null }[];
 
   return (
@@ -167,7 +169,13 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
       {/* ----- lock calendar (client component: weekday header + live month nav) ----- */}
       <section className="mt-16">
         <h2 className="label">{t.locks}</h2>
-        <LockCalendar lang={lang} tz={BOOKING_TZ} initialMonth={month} initialLocks={locks} />
+        <LockCalendar
+          lang={lang}
+          tz={BOOKING_TZ}
+          initialMonth={month}
+          initialLocks={locks}
+          closedDows={closedDows}
+        />
       </section>
     </main>
   );

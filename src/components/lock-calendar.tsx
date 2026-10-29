@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { dict, type Lang } from "@/lib/i18n";
 import { dayBounds, monthRange } from "@/lib/tz";
 import { toggleDayLock, saveLock, removeLock, type AdminResult } from "@/app/gestao/actions";
 import { fmtShort, fmtTime } from "@/lib/format";
+import MonthGrid, { type GridCellCfg } from "@/components/month-grid";
 
 interface LockRow {
   id: string;
@@ -28,20 +29,22 @@ const SUCCESS_KEY: Record<string, "msgSaved" | "msgLocked" | "msgUnlocked"> = {
 };
 
 /**
- * Fully client-side month calendar for day/period blocks:
- * weekday header, in-place month navigation (no page reload),
- * day toggles and partial blocks through server actions.
+ * Admin month calendar for day/period blocks, built on the shared MonthGrid.
+ * Day rules: past days and days closed in the weekly hours are inactive;
+ * locked days are filled; partially blocked days carry a green dot.
  */
 export default function LockCalendar({
   lang,
   tz,
   initialMonth,
   initialLocks,
+  closedDows,
 }: {
   lang: Lang;
   tz: string;
   initialMonth: string;
   initialLocks: LockRow[];
+  closedDows: number[];
 }) {
   const t = dict[lang];
   const locale = lang === "pt" ? "pt-BR" : "en";
@@ -59,23 +62,19 @@ export default function LockCalendar({
     void refetch();
   }, [month]);
 
-  // ---- calendar math (pure, client-safe)
-  const { first, days: nDays, startDow } = monthRange(month);
-  const monthEndExclusive = dayBounds(`${shiftMonth(month, 1)}-01`, tz).starts_at;
-  const monthStart = dayBounds(first, tz).starts_at;
-  const monthLocks = locks.filter((r) => r.starts_at < monthEndExclusive && r.ends_at > monthStart);
-  const monthLabel = new Intl.DateTimeFormat(locale, {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(`${month}-01T12:00:00Z`));
-  const dowLabels = Array.from({ length: 7 }, (_, i) =>
-    new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(
-      new Date(Date.UTC(2024, 0, 7 + i, 12)),
-    ), // 2024-01-07 was a Sunday
+  // "today" in the business timezone, for past-day checks
+  const today = useMemo(
+    () => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date()),
+    [tz],
   );
 
-  const stateFor = (date: string): "full" | "partial" | null => {
+  // ---- locking state
+  const { first, days: nDays } = monthRange(month);
+  const monthStart = dayBounds(first, tz).starts_at;
+  const monthEndExclusive = dayBounds(`${shiftMonth(month, 1)}-01`, tz).starts_at;
+  const monthLocks = locks.filter((r) => r.starts_at < monthEndExclusive && r.ends_at > monthStart);
+
+  const lockState = (date: string): "full" | "partial" | null => {
     const b = dayBounds(date, tz);
     let kind: "full" | "partial" | null = null;
     for (const r of monthLocks) {
@@ -85,16 +84,40 @@ export default function LockCalendar({
     return kind;
   };
 
+  const cells: Record<string, GridCellCfg> = {};
+  for (let i = 1; i <= nDays; i++) {
+    const iso = `${month}-${pad(i)}`;
+    const dow = new Date(`${iso}T12:00:00Z`).getUTCDay();
+    if (iso < today) {
+      cells[iso] = { state: "disabled", title: t.pastDay };
+      continue;
+    }
+    if (closedDows.includes(dow)) {
+      cells[iso] = { state: "disabled", title: t.closed };
+      continue;
+    }
+    const far = lockState(iso);
+    cells[iso] =
+      far === "full"
+        ? { state: "filled", title: t.locked }
+        : far === "partial"
+          ? { state: "ringed", dot: true, title: t.lockedPartial }
+          : { state: "free" };
+  }
+
   // ---- actions (server actions called directly, then local refresh)
-  const dayState = async (actionName: "toggleDayLock" | "saveLock" | "removeLock", fd: FormData) => {
-    const action = actionName === "toggleDayLock" ? toggleDayLock : actionName === "saveLock" ? saveLock : removeLock;
+  const runAction = async (
+    name: "toggleDayLock" | "saveLock" | "removeLock",
+    fd: FormData,
+    silentOnSuccess: boolean,
+  ) => {
+    const action = name === "toggleDayLock" ? toggleDayLock : name === "saveLock" ? saveLock : removeLock;
     setBusy(true);
     setMsg(null);
     try {
       const res = await action(null, fd);
       await refetch();
-      if (actionName !== "toggleDayLock" || !res.ok) setMsg(res);
-      return res;
+      if (!(silentOnSuccess && res.ok)) setMsg(res);
     } finally {
       setBusy(false);
     }
@@ -103,109 +126,46 @@ export default function LockCalendar({
   const toggleDay = async (date: string) => {
     const fd = new FormData();
     fd.set("date", date);
-    await dayState("toggleDayLock", fd);
+    await runAction("toggleDayLock", fd, true); // the circle flip itself is the confirmation
   };
 
   const submitPeriod = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    await dayState("saveLock", new FormData(e.currentTarget));
+    await runAction("saveLock", new FormData(e.currentTarget), false);
   };
 
   const unlock = async (id: string) => {
     const fd = new FormData();
     fd.set("id", id);
-    await dayState("removeLock", fd);
+    await runAction("removeLock", fd, true); // row disappears = confirmation
   };
 
   return (
     <>
-      {/* header with in-place month navigation */}
-      <div className="mt-5 flex items-center justify-between">
-        <button
-          type="button"
-          disabled={busy}
-          aria-label={t.prevM}
-          onClick={() => setMonth(shiftMonth(month, -1))}
-          className="btn btn-sm border-transparent px-3 text-soft hover:border-line"
-        >
-          ‹ {t.prevM}
-        </button>
-        <p className="font-serif text-lg first-letter:uppercase">
-          {monthLabel} <span className="text-soft">· {month.replace("-", "/")}</span>
-        </p>
-        <button
-          type="button"
-          disabled={busy}
-          aria-label={t.nextM}
-          onClick={() => setMonth(shiftMonth(month, 1))}
-          className="btn btn-sm border-transparent px-3 text-soft hover:border-line"
-        >
-          {t.nextM} ›
-        </button>
-      </div>
+      <MonthGrid
+        lang={lang}
+        month={month}
+        cells={cells}
+        onMove={(d) => setMonth(shiftMonth(month, d))}
+        onSelect={(iso) => void toggleDay(iso)}
+        navDisabled={busy}
+      />
       {msg && (
-        <p
-          role="status"
-          className={
-            "mt-3 flex gap-2 text-sm " + (msg.ok ? "text-accent" : "text-warn")
-          }
-        >
+        <p role="status" className={"mt-3 flex gap-2 text-sm " + (msg.ok ? "text-accent" : "text-warn")}>
           {msg.ok ? t[SUCCESS_KEY[msg.code ?? ""] ?? "msgSaved"] : t.msgError}
           {!msg.ok && msg.detail && <span className="text-xs opacity-70">{msg.detail}</span>}
         </p>
       )}
-
-      {/* real calendar grid */}
-      <div className="mt-4 rounded-2xl border border-line bg-panel px-5 py-5 sm:px-7">
-        <div className="grid grid-cols-7 text-center">
-          {dowLabels.map((d, i) => (
-            <span key={i} className="label py-2">
-              {d}
-            </span>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-y-1.5 justify-items-center">
-          {Array.from({ length: startDow }).map((_, i) => (
-            <span key={`e${i}`} className="h-10 w-10" />
-          ))}
-          {Array.from({ length: nDays }, (_, i) => {
-            const date = `${month}-${pad(i + 1)}`;
-            const st = stateFor(date);
-            const d = i + 1;
-            return (
-              <div key={date} className="relative">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void toggleDay(date)}
-                  title={st === "full" ? t.locked : st === "partial" ? t.lockedPartial : undefined}
-                  aria-pressed={st === "full"}
-                  className={
-                    "flex h-10 w-10 items-center justify-center rounded-full text-sm transition-colors " +
-                    (st === "full"
-                      ? "bg-ink text-paper"
-                      : st === "partial"
-                        ? "text-ink shadow-[inset_0_0_0_1.5px_#2f5240]"
-                        : "text-ink hover:bg-paper hover:shadow-[inset_0_0_0_1px_#e8e1d5]")
-                  }
-                >
-                  {d}
-                </button>
-                {st === "partial" && (
-                  <span className="absolute left-1/2 bottom-0.5 h-1 w-1 -translate-x-1/2 rounded-full bg-accent" />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
       <p className="mt-2 flex items-center justify-center gap-2 text-xs text-soft">
         <span className="inline-block h-3 w-3 rounded-full bg-ink" /> {t.locked}
         <span className="inline-block h-3 w-3 rounded-full shadow-[inset_0_0_0_1.5px_#2f5240]" /> {t.lockedPartial}
       </p>
 
       {/* block a partial period */}
-      <form onSubmit={submitPeriod} className="mt-6 flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-panel p-4 sm:p-6">
+      <form
+        onSubmit={submitPeriod}
+        className="mt-6 flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-panel p-4 sm:p-6"
+      >
         <label className="block">
           <span className="label">{t.addLock}</span>
           <input type="date" name="date" required className="input mt-1.5" />
