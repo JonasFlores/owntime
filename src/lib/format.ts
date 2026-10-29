@@ -23,12 +23,13 @@ export function fmtTime(iso: string, lang: Lang): string {
   }).format(new Date(iso));
 }
 
-/** Short date used in admin lists: 4/5/26. */
+/** Short date used in admin lists: dd/mm/yyyy. */
 export function fmtShort(iso: string, lang: Lang): string {
-  return new Intl.DateTimeFormat(localeOf(lang), {
-    year: "2-digit",
-    month: "numeric",
-    day: "numeric",
+  void lang; // dd/mm/yyyy is the requested pattern in both languages
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
     timeZone: BOOKING_TZ,
   }).format(new Date(iso));
 }

@@ -1,39 +1,25 @@
-import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import { isConfigured } from "@/lib/supabase";
 import { getLang } from "@/lib/lang";
 import { dict } from "@/lib/i18n";
-import { fmtShort, fmtTime, localeOf } from "@/lib/format";
+import { localeOf } from "@/lib/format";
 import type { ServiceRow } from "@/lib/booking";
-import { saveService, saveHours, toggleDayLock, saveLock, removeLock } from "@/app/gestao/actions";
-import { dayBounds, monthRange, BOOKING_TZ } from "@/lib/tz";
+import { saveService, saveHours } from "@/app/gestao/actions";
+import { BOOKING_TZ } from "@/lib/tz";
 import ActionForm from "@/components/action-form";
 import AdminNav from "@/components/admin-nav";
 import SetupNotice from "@/components/setup-notice";
+import LockCalendar from "@/components/lock-calendar";
 
-const pad = (n: number) => String(n).padStart(2, "0");
-
-function prevMonth(m: string): string {
-  const [y, mo] = m.split("-").map(Number);
-  return mo === 1 ? `${y - 1}-12` : `${y}-${pad(mo - 1)}`;
-}
-function nextMonth(m: string): string {
-  const [y, mo] = m.split("-").map(Number);
-  return mo === 12 ? `${y + 1}-01` : `${y}-${pad(mo + 1)}`;
-}
-
-interface LockRow {
-  id: string;
-  starts_at: string;
-  ends_at: string;
-  reason: string | null;
-}
+const validMonth = (m: string | undefined): string => {
+  const q = m ?? "";
+  return /^[0-9]{4}-(10|11|12|0[1-9])$/.test(q) ? q
+    : new Intl.DateTimeFormat("en-CA", { timeZone: BOOKING_TZ }).format(new Date()).slice(0, 7);
+};
 
 export default async function AdminSchedule({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
   const sp = await searchParams;
-  const month = sp.m && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.m)
-    ? sp.m
-    : new Intl.DateTimeFormat("en-CA", { timeZone: BOOKING_TZ }).format(new Date()).slice(0, 7);
+  const month = validMonth(sp.m);
   const lang = await getLang();
   const t = dict[lang];
   const locale = localeOf(lang);
@@ -60,24 +46,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
       { open: r.open, start_time: r.start_time, end_time: r.end_time },
     ]),
   );
-  const locks = (to.data ?? []) as LockRow[];
-
-  // month range to filter locks shown
-  const { first, last, days: nDays, startDow } = monthRange(month);
-  const monthStart = dayBounds(first).starts_at;
-  const monthEndExclusive = dayBounds(nextMonth(month)).starts_at;
-  const monthLocks = locks.filter((r) => r.starts_at < monthEndExclusive && r.ends_at > monthStart);
-
-  // per-day lock state for the grid
-  const stateFor = (date: string): "full" | "partial" | null => {
-    const b = dayBounds(date);
-    let kind: "full" | "partial" | null = null;
-    for (const r of monthLocks) {
-      if (r.starts_at === b.starts_at && r.ends_at === b.ends_at) return "full";
-      if (r.starts_at < b.ends_at && r.ends_at > b.starts_at) kind = "partial";
-    }
-    return kind;
-  };
+  const locks = (to.data ?? []) as { id: string; starts_at: string; ends_at: string; reason: string | null }[];
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 pt-12 pb-16">
@@ -195,96 +164,10 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
         </ActionForm>
       </section>
 
-      {/* ----- lock calendar ----- */}
+      {/* ----- lock calendar (client component: weekday header + live month nav) ----- */}
       <section className="mt-16">
         <h2 className="label">{t.locks}</h2>
-        <div className="mt-5 flex items-center justify-between">
-          <Link href={`/gestao/schedule?m=${prevMonth(month)}`} className="text-sm text-soft hover:text-ink">
-            ‹ {t.prevM}
-          </Link>
-          <p className="font-serif text-lg">
-            {new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: "UTC" }).format(
-              new Date(`${month}-01T12:00:00Z`),
-            )}
-          </p>
-          <Link href={`/gestao/schedule?m=${nextMonth(month)}`} className="text-sm text-soft hover:text-ink">
-            {t.nextM} ›
-          </Link>
-        </div>
-
-        {/* grid: click a day to block / unblock the whole day */}
-        <div className="mt-4 flex flex-wrap justify-center gap-1.5 rounded-2xl border border-line bg-panel px-5 py-6 sm:px-7">
-          {Array.from({ length: startDow }).map((_, i) => (
-            <span key={`e${i}`} className="h-11 w-11" />
-          ))}
-          {Array.from({ length: nDays }, (_, i) => {
-            const date = `${month}-${pad(i + 1)}`;
-            const st = stateFor(date);
-            return (
-              <ActionForm key={date} action={toggleDayLock} lang={lang} hideSuccess className="inline-block">
-                <input type="hidden" name="date" value={date} />
-                <button
-                  type="submit"
-                  title={st === "full" ? t.locked : st === "partial" ? t.lockedPartial : undefined}
-                  className={
-                    "flex h-11 w-11 items-center justify-center rounded-full text-sm transition-colors " +
-                    (st === "full"
-                      ? "bg-ink text-paper"
-                      : st === "partial"
-                        ? "text-ink shadow-[inset_0_0_0_1.5px_#2f5240]"
-                        : "text-ink hover:bg-paper hover:shadow-[inset_0_0_0_1px_#e8e1d5]")
-                  }
-                >
-                  {i + 1}
-                </button>
-              </ActionForm>
-            );
-          })}
-        </div>
-        <p className="mt-2 flex items-center justify-center gap-2 text-xs text-soft">
-          <span className="inline-block h-3 w-3 rounded-full bg-ink" /> {t.locked}
-          <span className="inline-block h-3 w-3 rounded-full shadow-[inset_0_0_0_1.5px_#2f5240]" /> {t.lockedPartial}
-        </p>
-
-        {/* block a partial period */}
-        <ActionForm action={saveLock} lang={lang} className="mt-6 flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-panel p-4 sm:p-6">
-          <label className="block">
-            <span className="label">{t.addLock}</span>
-            <input type="date" name="date" required className="input mt-1.5" />
-          </label>
-          <input type="time" name="start" required className="input w-24" aria-label="start" />
-          <input type="time" name="end" required className="input w-24" aria-label="end" />
-          <button type="submit" className="btn btn-sm btn-primary">
-            {t.save}
-          </button>
-        </ActionForm>
-
-        {/* existing locks this month */}
-        {monthLocks.length === 0 ? (
-          <p className="mt-4 text-sm text-soft">{t.empty}</p>
-        ) : (
-          <ul className="mt-6 divide-y divide-line border-y border-line">
-            {monthLocks.map((r) => (
-              <li key={r.id} className="flex items-center justify-between py-3 text-sm">
-                <span>
-                  {fmtShort(r.starts_at, lang)}
-                  {r.reason === "locked-period" && (
-                    <>
-                      <span className="text-soft"> · </span>
-                      {fmtTime(r.starts_at, lang)}–{fmtTime(r.ends_at, lang)}
-                    </>
-                  )}
-                </span>
-                <ActionForm action={removeLock} lang={lang} hideSuccess className="inline">
-                  <input type="hidden" name="id" value={r.id} />
-                  <button type="submit" className="text-sm text-soft underline decoration-line underline-offset-4 hover:text-ink">
-                    {t.unlock}
-                  </button>
-                </ActionForm>
-              </li>
-            ))}
-          </ul>
-        )}
+        <LockCalendar lang={lang} tz={BOOKING_TZ} initialMonth={month} initialLocks={locks} />
       </section>
     </main>
   );

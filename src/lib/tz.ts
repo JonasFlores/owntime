@@ -9,13 +9,13 @@ dayjs.extend(timezone);
 export const BOOKING_TZ = process.env.APPOINTMENT_TIMEZONE || "America/Sao_Paulo";
 
 /** Convert a business-local date (and optional time) to a UTC ISO string. */
-export function atTz(date: string, time = "00:00:00"): string {
-  return dayjs.tz(`${date} ${time}`, BOOKING_TZ).toISOString();
+export function atTz(date: string, time = "00:00:00", tz: string = BOOKING_TZ): string {
+  return dayjs.tz(`${date} ${time}`, tz).toISOString();
 }
 
 /** Bounds of a full business-local day: millisecond range [day, nextDay). */
-export function dayBounds(date: string): { starts_at: string; ends_at: string } {
-  const d = dayjs.tz(`${date} 00:00:00`, BOOKING_TZ);
+export function dayBounds(date: string, tz: string = BOOKING_TZ): { starts_at: string; ends_at: string } {
+  const d = dayjs.tz(`${date} 00:00:00`, tz);
   return { starts_at: d.toISOString(), ends_at: d.add(1, "day").toISOString() };
 }
 
