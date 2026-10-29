@@ -48,7 +48,7 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
   );
   // weekdays with no open hours are inactive in the lock calendar
   const closedDows = [0, 1, 2, 3, 4, 5, 6].filter((d) => !hours.get(d)?.open);
-  const locks = (to.data ?? []) as { id: string; starts_at: string; ends_at: string; reason: string | null }[];
+  const locks = (to.data ?? []) as { id: string; starts_at: string; ends_at: string; reason: string | null; note: string | null }[];
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 pt-12 pb-16">

@@ -16,3 +16,18 @@ export async function requireAdmin(): Promise<{ sb: SupabaseClient; user: User }
   if (!row) redirect("/gestao/login?error=denied");
   return { sb, user };
 }
+
+/**
+ * Guard for admin JSON endpoints (fetch-based clients): same checks as
+ * requireAdmin but returning HTTP statuses instead of redirecting.
+ */
+export async function adminGate(): Promise<{ ok: true; sb: SupabaseClient } | { ok: false; status: 401 | 403 }> {
+  const sb = await getSupabase();
+  const {
+    data: { user },
+  } = await sb.auth.getUser();
+  if (!user) return { ok: false, status: 401 };
+  const { data: row } = await sb.from("admin_users").select("user_id").eq("user_id", user.id).maybeSingle();
+  if (!row) return { ok: false, status: 403 };
+  return { ok: true, sb };
+}

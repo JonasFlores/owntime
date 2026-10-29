@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { dict, type Lang } from "@/lib/i18n";
-import { dayBounds, monthRange } from "@/lib/tz";
-import { toggleDayLock, saveLock, removeLock, type AdminResult } from "@/app/gestao/actions";
+import { dayBounds, monthRange, shiftMonth } from "@/lib/tz";
+import { toggleDayLock, saveLock, removeLock, updateLockNote, type AdminResult } from "@/app/gestao/actions";
 import { fmtShort, fmtTime } from "@/lib/format";
 import MonthGrid, { type GridCellCfg } from "@/components/month-grid";
 
@@ -12,15 +12,10 @@ interface LockRow {
   starts_at: string;
   ends_at: string;
   reason: string | null;
+  note: string | null;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
-
-function shiftMonth(m: string, d: number): string {
-  const [y, mo] = m.split("-").map(Number);
-  const z = mo + d;
-  return z < 1 ? `${y - 1}-12` : z > 12 ? `${y + 1}-01` : `${y}-${pad(z)}`;
-}
 
 const SUCCESS_KEY: Record<string, "msgSaved" | "msgLocked" | "msgUnlocked"> = {
   saved: "msgSaved",
@@ -172,6 +167,13 @@ export default function LockCalendar({
         </label>
         <input type="time" name="start" required className="input w-24" aria-label="start" />
         <input type="time" name="end" required className="input w-24" aria-label="end" />
+        <input
+          name="note"
+          maxLength={200}
+          placeholder={t.lockNotePh}
+          className="input w-full sm:w-56"
+          aria-label={t.editNote}
+        />
         <button type="submit" disabled={busy} className="btn btn-sm btn-primary">
           {t.save}
         </button>
@@ -183,24 +185,27 @@ export default function LockCalendar({
       ) : (
         <ul className="mt-6 divide-y divide-line border-y border-line">
           {monthLocks.map((r) => (
-            <li key={r.id} className="flex items-center justify-between py-3 text-sm">
-              <span>
-                {fmtShort(r.starts_at, lang)}
-                {r.reason === "locked-period" && (
-                  <>
-                    <span className="text-soft"> · </span>
-                    {fmtTime(r.starts_at, lang)}–{fmtTime(r.ends_at, lang)}
-                  </>
-                )}
-              </span>
-              <button
-                type="button"
-                onClick={() => void unlock(r.id)}
-                disabled={busy}
-                className="text-sm text-soft underline decoration-line underline-offset-4 hover:text-ink"
-              >
-                {t.unlock}
-              </button>
+            <li key={r.id} className="py-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span>
+                  {fmtShort(r.starts_at, lang)}
+                  {r.reason === "locked-period" && (
+                    <>
+                      <span className="text-soft"> · </span>
+                      {fmtTime(r.starts_at, lang)}–{fmtTime(r.ends_at, lang)}
+                    </>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void unlock(r.id)}
+                  disabled={busy}
+                  className="text-soft underline decoration-line underline-offset-4 hover:text-ink"
+                >
+                  {t.unlock}
+                </button>
+              </div>
+              {r.note && <p className="mt-1 text-xs italic text-soft">{r.note}</p>}
             </li>
           ))}
         </ul>

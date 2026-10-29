@@ -32,6 +32,9 @@ create table if not exists public.time_off (
   reason text
 );
 
+-- free-text explanation of a block ("holiday", "off-site"…), shown in the dashboard
+alter table public.time_off add column if not exists note text;
+
 create table if not exists public.admin_users (
   user_id uuid primary key references auth.users(id) on delete cascade,
   email text

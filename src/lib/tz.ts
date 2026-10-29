@@ -28,3 +28,11 @@ export function monthRange(month: string): { first: string; last: string; days: 
   const startDow = dayjs.utc(`${month}-01`).day();
   return { first, last, days, startDow };
 }
+
+/** "2026-03" moved by n months, crossing year boundaries. */
+export function shiftMonth(m: string, n: number): string {
+  const [y, mo] = m.split("-").map(Number);
+  if (!y || !mo) return m;
+  const z = mo + n;
+  return z < 1 ? `${y - 1}-12` : z > 12 ? `${y + 1}-01` : `${y}-${String(z).padStart(2, "0")}`;
+}

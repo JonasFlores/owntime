@@ -108,9 +108,14 @@ export async function saveHours(_prev: AdminResult | null, fd: FormData): Promis
 
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
+const nextDayIso = (date: string) =>
+  new Date(new Date(`${date}T12:00:00Z`).getTime() + 86400000).toISOString().slice(0, 10);
+
+/** Full-day block toggle. Note text is optional, editable later from the dashboard. */
 export async function toggleDayLock(_prev: AdminResult | null, fd: FormData): Promise<AdminResult> {
   const { sb } = await requireAdmin();
   const date = String(fd.get("date") || "");
+  const note = String(fd.get("note") || "").trim().slice(0, 200) || null;
   if (!isDate(date)) return fail("Invalid date");
   const b = dayBounds(date);
   const { data: existing } = await sb
@@ -123,20 +128,32 @@ export async function toggleDayLock(_prev: AdminResult | null, fd: FormData): Pr
     const { error } = await sb.from("time_off").delete().eq("id", existing.id);
     return error ? fail(error.message) : ok("unlocked");
   }
-  const { error } = await sb.from("time_off").insert({ ...b, reason: "locked-day" });
+  const { error } = await sb.from("time_off").insert({ ...b, reason: "locked-day", note });
   return error ? fail(error.message) : ok("locked");
 }
 
+/** Create a partial lock, optionally with an explanatory note. */
 export async function saveLock(_prev: AdminResult | null, fd: FormData): Promise<AdminResult> {
   const { sb } = await requireAdmin();
   const date = String(fd.get("date") || "");
   const start = normTime(String(fd.get("start") || ""));
   const end = normTime(String(fd.get("end") || ""));
+  const note = String(fd.get("note") || "").trim().slice(0, 200) || null;
   if (!isDate(date) || !isCoherentWindow(start, end)) return fail("Invalid period");
   const starts_at = atTz(date, start);
   const ends_at = atTz(date, end);
   if (ends_at <= starts_at) return fail("End must be after start");
-  const { error } = await sb.from("time_off").insert({ starts_at, ends_at, reason: "locked-period" });
+  const { error } = await sb.from("time_off").insert({ starts_at, ends_at, reason: "locked-period", note });
+  return error ? fail(error.message) : ok("saved");
+}
+
+/** Rewrite the explanation note on an existing block. */
+export async function updateLockNote(_prev: AdminResult | null, fd: FormData): Promise<AdminResult> {
+  const { sb } = await requireAdmin();
+  const id = z.string().uuid().safeParse(fd.get("id"));
+  if (!id.success) return fail("Invalid id");
+  const note = String(fd.get("note") || "").trim().slice(0, 200) || null;
+  const { error } = await sb.from("time_off").update({ note }).eq("id", id.data);
   return error ? fail(error.message) : ok("saved");
 }
 
@@ -146,4 +163,70 @@ export async function removeLock(_prev: AdminResult | null, fd: FormData): Promi
   if (!id.success) return fail("Invalid id");
   const { error } = await sb.from("time_off").delete().eq("id", id.data);
   return error ? fail(error.message) : ok("unlocked");
+}
+
+/* ---------- edit an appointment (reschedule / fix details) ---------- */
+
+const apptSchema = z.object({
+  id: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  start: z.string().min(3).max(8),
+});
+
+export async function updateAppointment(_prev: AdminResult | null, fd: FormData): Promise<AdminResult> {
+  const { sb } = await requireAdmin();
+  const guest_name = String(fd.get("guest_name") || "").trim().slice(0, 80);
+  const guest_phone = String(fd.get("guest_phone") || "").trim().slice(0, 20);
+  const guest_email = String(fd.get("guest_email") || "").trim().slice(0, 120);
+  const note = String(fd.get("note") || "").trim().slice(0, 500);
+  const parsed = apptSchema.safeParse({
+    id: String(fd.get("id") || ""),
+    date: String(fd.get("date") || ""),
+    start: String(fd.get("start") || ""),
+  });
+  if (!parsed.success || guest_name.length < 2 || guest_phone.length < 5)
+    return fail("Name, phone, date and time are required");
+  if (guest_email && !/^\S+@\S+\.\S+$/.test(guest_email)) return fail("Invalid email");
+
+  const start = normTime(parsed.data.start);
+  if (!start) return fail("Invalid start time");
+  let end = normTime(String(fd.get("end") || ""));
+  let date = parsed.data.date;
+  if (!isCoherentWindow(start, end)) {
+    // blank end → fall back to the service duration; crossing midnight rolls the end date
+    if (end && end !== "00:00") return fail("End must be after start");
+    const { data: appt } = await sb
+      .from("appointments")
+      .select("id,services(duration_minutes)")
+      .eq("id", parsed.data.id)
+      .maybeSingle();
+    const dur = (appt as { services?: { duration_minutes?: number } | null } | null)?.services?.duration_minutes;
+    if (!dur) return fail("End must be after start");
+    const [h, m] = start.split(":").map(Number);
+    let eMin = h * 60 + m + dur;
+    if (eMin >= 1440) {
+      date = nextDayIso(date);
+      eMin -= 1440;
+    }
+    end = `${String(Math.floor(eMin / 60)).padStart(2, "0")}:${String(eMin % 60).padStart(2, "0")}`;
+  }
+  const starts_at = atTz(date, start);
+  const ends_at = atTz(date, end);
+  const { error } = await sb
+    .from("appointments")
+    .update({
+      starts_at,
+      ends_at,
+      guest_name,
+      guest_phone,
+      guest_email: guest_email || null,
+      note: note || null,
+    })
+    .eq("id", parsed.data.id);
+  if (error) {
+    // 23P01: exclusion constraint — this slot overlaps another live appointment
+    if ((error as { code?: string }).code === "23P01") return { ok: false, code: "taken", detail: error.message };
+    return fail(error.message);
+  }
+  return ok("updated");
 }
