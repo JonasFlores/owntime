@@ -49,7 +49,7 @@ create table if not exists public.appointments (
     check (status in ('pending','approved','rejected','cancelled')),
   guest_name text not null,
   guest_phone text not null,
-  guest_email text,
+  guest_email text not null,
   note text,
   decision_note text,
   created_at timestamptz not null default now(),
@@ -153,6 +153,10 @@ declare
   v_end timestamptz;
   v_id uuid;
 begin
+  if p_email is null or btrim(p_email) = '' or position('@' in p_email) <= 1 then
+    return jsonb_build_object('ok', false, 'error', 'email');
+  end if;
+
   select duration_minutes into v_dur from services where id = p_service and active;
   if v_dur is null then
     return jsonb_build_object('ok', false, 'error', 'service');
@@ -174,7 +178,7 @@ begin
     insert into appointments (service_id, starts_at, ends_at, status,
                               guest_name, guest_phone, guest_email, note)
     values (p_service, v_start, v_end, 'pending',
-            p_name, p_phone, nullif(p_email, ''), nullif(p_note, ''))
+            p_name, p_phone, btrim(p_email), nullif(p_note, ''))
     returning id into v_id;
   exception when exclusion_violation then
     return jsonb_build_object('ok', false, 'error', 'taken');

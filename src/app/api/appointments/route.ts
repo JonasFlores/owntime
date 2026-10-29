@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminGate } from "@/lib/admin";
 import { isConfigured } from "@/lib/supabase";
+import { submitAppointment } from "@/lib/create-appointment";
 
 export const dynamic = "force-dynamic";
 
@@ -27,4 +28,14 @@ export async function GET(req: Request) {
     .order("starts_at");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ appointments: data ?? [] });
+}
+
+/** Stable public booking endpoint; unlike a Server Action its URL survives deploys and dev HMR. */
+export async function POST(req: Request) {
+  try {
+    const result = await submitAppointment(await req.formData());
+    return NextResponse.json(result);
+  } catch {
+    return NextResponse.json({ ok: false, error: "generic" }, { status: 500 });
+  }
 }

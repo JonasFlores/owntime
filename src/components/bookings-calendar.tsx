@@ -626,6 +626,7 @@ export default function BookingsCalendar({
                         <input
                           name="guest_email"
                           type="email"
+                          required
                           maxLength={120}
                           defaultValue={x.guest_email ?? ""}
                           placeholder={t.emailPh}

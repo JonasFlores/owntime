@@ -6,6 +6,7 @@ import { getSupabase, isConfigured } from "@/lib/supabase";
 import { atTz, dayBounds } from "@/lib/tz";
 import { normTime, isCoherentWindow } from "@/lib/time";
 import { requireAdmin } from "@/lib/admin";
+import { sendBookingApproved } from "@/lib/email";
 
 /** Every admin form action resolves to this state (useActionState pattern). */
 export type AdminResult = { ok: boolean; code?: string; detail?: string };
@@ -41,6 +42,12 @@ export async function decide(_prev: AdminResult | null, fd: FormData): Promise<A
   const status = fd.get("status");
   if (!id.success || (status !== "approved" && status !== "rejected")) return fail("bad request");
   const note = String(fd.get("decision_note") || "").slice(0, 300) || null;
+  const { data: appointment, error: readError } = await sb
+    .from("appointments")
+    .select("status,starts_at,ends_at,guest_name,guest_phone,guest_email,note,services(name_pt)")
+    .eq("id", id.data)
+    .maybeSingle();
+  if (readError || !appointment) return fail(readError?.message ?? "Appointment not found");
   const { error } = await sb
     .from("appointments")
     .update({
@@ -50,7 +57,23 @@ export async function decide(_prev: AdminResult | null, fd: FormData): Promise<A
       decision_note: status === "approved" ? null : note,
     })
     .eq("id", id.data);
-  return error ? fail(error.message) : ok(status);
+  if (error) return fail(error.message);
+
+  // Send once, only on a real transition into approved. Approval remains
+  // successful if Resend is temporarily unavailable.
+  if (status === "approved" && appointment.status !== "approved" && appointment.guest_email) {
+    const service = appointment.services as unknown as { name_pt?: string } | null;
+    await sendBookingApproved({
+      guestName: appointment.guest_name,
+      guestEmail: appointment.guest_email,
+      guestPhone: appointment.guest_phone,
+      service: service?.name_pt ?? "Agendamento",
+      startsAt: appointment.starts_at,
+      endsAt: appointment.ends_at,
+      note: appointment.note,
+    });
+  }
+  return ok(status);
 }
 
 /* ---------- services ---------- */
@@ -184,9 +207,9 @@ export async function updateAppointment(_prev: AdminResult | null, fd: FormData)
     date: String(fd.get("date") || ""),
     start: String(fd.get("start") || ""),
   });
-  if (!parsed.success || guest_name.length < 2 || guest_phone.length < 5)
-    return fail("Name, phone, date and time are required");
-  if (guest_email && !/^\S+@\S+\.\S+$/.test(guest_email)) return fail("Invalid email");
+  if (!parsed.success || guest_name.length < 2 || guest_phone.length < 5 || !guest_email)
+    return fail("Name, phone, email, date and time are required");
+  if (!/^\S+@\S+\.\S+$/.test(guest_email)) return fail("Invalid email");
 
   const start = normTime(parsed.data.start);
   if (!start) return fail("Invalid start time");
@@ -219,7 +242,7 @@ export async function updateAppointment(_prev: AdminResult | null, fd: FormData)
       ends_at,
       guest_name,
       guest_phone,
-      guest_email: guest_email || null,
+      guest_email,
       note: note || null,
     })
     .eq("id", parsed.data.id);

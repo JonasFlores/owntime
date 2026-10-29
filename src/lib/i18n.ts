@@ -23,7 +23,7 @@ const en = {
   phonePh: "+1 555 000 0000",
   password: "Password",
   email: "Email",
-  emailHint: "Optional — to receive the confirmation",
+  emailHint: "Required — the confirmation will be sent to this address",
   emailPh: "you@email.com",
   notes: "Notes",
   notesPh: "Optional",
@@ -35,7 +35,7 @@ const en = {
   errGeneric: "Could not send. Please try again.",
   thanksTitle: "Request received",
   thanksBody:
-    "Once approved, it enters the calendar and you receive a confirmation — by email, if you provided one.",
+    "Once approved, it enters the calendar and you receive a confirmation by email.",
   thanksBack: "Back to start",
   // admin
   adminEyebrow: "Admin",
@@ -129,7 +129,7 @@ export const dict: { pt: typeof en; en: typeof en } = {
     phonePh: "(11) 99999-9999",
     password: "Senha",
     email: "E-mail",
-    emailHint: "Opcional — para receber a confirmação",
+    emailHint: "Obrigatório — a confirmação será enviada para este endereço",
     emailPh: "voce@email.com",
     notes: "Observações",
     notesPh: "Opcional",
@@ -141,7 +141,7 @@ export const dict: { pt: typeof en; en: typeof en } = {
     errGeneric: "Não foi possível enviar. Tente novamente.",
     thanksTitle: "Pedido recebido",
     thanksBody:
-      "Quando aprovado, ele entra na agenda e você recebe a confirmação — por e-mail, se tiver informado um.",
+      "Quando aprovado, ele entra na agenda e você recebe a confirmação por e-mail.",
     thanksBack: "Voltar ao início",
     adminEyebrow: "Admin",
     loginTitle: "Entrar",

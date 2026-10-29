@@ -11,6 +11,7 @@ Current flow (2025/2026): hPanel no longer uses the old Passenger "Advanced → 
      - Build command: `build` · Output directory: `.next` (do not change)
 2. **Environment variables** (hPanel, Node app → Environment variables) — set before first build since `NEXT_PUBLIC_*` get baked in:
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `APPOINTMENT_TIMEZONE`, `NODE_ENV=production`
+   - Email: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ADMIN_NOTIFICATION_EMAILS`
 3. Deploy and watch the **Deployments** build log.
 
 ## Good to know
@@ -30,3 +31,4 @@ Current flow (2025/2026): hPanel no longer uses the old Passenger "Advanced → 
 - [ ] Supabase project created + `supabase/schema.sql` executed in the SQL editor
 - [ ] Admin(s) signed up on `/gestao/login` and inserted into `admin_users`
 - [ ] Test booking → approve → verify slot becomes unavailable
+- [ ] Test booking → admin alert email → approve → customer confirmation email

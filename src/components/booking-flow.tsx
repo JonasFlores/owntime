@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useActionState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createAppointment, type SubmitState } from "@/app/actions";
+import type { SubmitState } from "@/lib/create-appointment";
 import { dict, type Lang } from "@/lib/i18n";
 import MonthGrid, { type GridCellCfg } from "@/components/month-grid";
 import { monthRange } from "@/lib/tz";
@@ -27,7 +27,8 @@ export default function BookingFlow({ service, lang }: Props) {
   const [slots, setSlots] = useState<string[] | null>(null);
   const [slot, setSlot] = useState<string | null>(null);
   const startedAt = useState(() => Date.now())[0];
-  const [state, action, pending] = useActionState(createAppointment, { ok: false } as SubmitState);
+  const [state, setState] = useState<SubmitState>({ ok: false });
+  const [pending, setPending] = useState(false);
 
   // month overview
   useEffect(() => {
@@ -60,6 +61,24 @@ export default function BookingFlow({ service, lang }: Props) {
   useEffect(() => {
     if (state.ok) router.push("/thanks");
   }, [state.ok, router]);
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPending(true);
+    setState({ ok: false });
+    try {
+      const response = await fetch("/api/appointments", {
+        method: "POST",
+        body: new FormData(event.currentTarget),
+      });
+      const result = (await response.json()) as SubmitState;
+      setState(response.ok ? result : { ok: false, error: "generic" });
+    } catch {
+      setState({ ok: false, error: "generic" });
+    } finally {
+      setPending(false);
+    }
+  };
 
   const moveMonth = (d: number) => {
     setSlot(null);
@@ -135,7 +154,7 @@ export default function BookingFlow({ service, lang }: Props) {
 
       {/* request form */}
       {date && slot && (
-        <form action={action} className="mt-10 rounded-2xl border border-line bg-panel p-6 sm:p-8">
+        <form onSubmit={submit} className="mt-10 rounded-2xl border border-line bg-panel p-6 sm:p-8">
           <p className="label">{t.yourDetails}</p>
           <p className="mt-3 font-serif text-xl">
             {service.name} · {dateLabel?.charAt(0).toUpperCase()}
@@ -166,7 +185,7 @@ export default function BookingFlow({ service, lang }: Props) {
             </label>
             <label className="block">
               <span className="label">{t.email}</span>
-              <input name="email" type="email" placeholder={t.emailPh} className="input mt-2" />
+              <input name="email" type="email" required maxLength={120} placeholder={t.emailPh} className="input mt-2" />
               <span className="mt-1 block text-xs text-soft">{t.emailHint}</span>
             </label>
             <label className="block sm:col-span-2">
