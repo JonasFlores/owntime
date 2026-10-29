@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getSupabase, isConfigured } from "@/lib/supabase";
 import { atTz, dayBounds } from "@/lib/tz";
+import { normTime, isCoherentWindow } from "@/lib/time";
 import { requireAdmin } from "@/lib/admin";
 
 /** Every admin form action resolves to this state (useActionState pattern). */
@@ -83,9 +84,6 @@ export async function saveService(_prev: AdminResult | null, fd: FormData): Prom
 
 /* ---------- weekly working hours ---------- */
 
-const hm = /^\d{2}:\d{2}$/;
-const normTime = (v: string) => v.slice(0, 5); // Postgres may return "09:00:00"
-
 export async function saveHours(_prev: AdminResult | null, fd: FormData): Promise<AdminResult> {
   const { sb } = await requireAdmin();
   const rows: { day_of_week: number; open: boolean; start_time: string; end_time: string }[] = [];
@@ -93,7 +91,7 @@ export async function saveHours(_prev: AdminResult | null, fd: FormData): Promis
     const open = fd.get(`open-${dow}`) === "on";
     const start = normTime(String(fd.get(`start-${dow}`) || ""));
     const end = normTime(String(fd.get(`end-${dow}`) || ""));
-    if (!hm.test(start) || !hm.test(end) || start >= end) {
+    if (!isCoherentWindow(start, end)) {
       // malformed input on an open day is a real error, not a silent skip
       if (open) return fail("Times must be HH:MM, with closing later than opening");
       rows.push({ day_of_week: dow, open: false, start_time: "09:00", end_time: "18:00" }); // placeholder for closed day
@@ -134,7 +132,7 @@ export async function saveLock(_prev: AdminResult | null, fd: FormData): Promise
   const date = String(fd.get("date") || "");
   const start = normTime(String(fd.get("start") || ""));
   const end = normTime(String(fd.get("end") || ""));
-  if (!isDate(date) || !hm.test(start) || !hm.test(end)) return fail("Invalid period");
+  if (!isDate(date) || !isCoherentWindow(start, end)) return fail("Invalid period");
   const starts_at = atTz(date, start);
   const ends_at = atTz(date, end);
   if (ends_at <= starts_at) return fail("End must be after start");
