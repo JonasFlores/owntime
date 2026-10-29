@@ -23,12 +23,15 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
       </main>
     );
 
-  await requireAdmin(); // redirect anonymous visitors to the login before any calendar renders
+  const { sb } = await requireAdmin(); // redirect anonymous visitors before any calendar renders
+  const { data: hours } = await sb.from("working_hours").select("day_of_week,open");
+  const openDows = new Set((hours ?? []).filter((x) => x.open).map((x) => x.day_of_week));
+  const closedDows = [0, 1, 2, 3, 4, 5, 6].filter((dow) => !openDows.has(dow));
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 pt-12 pb-16">
       <AdminNav t={t} lang={lang} active="bookings" />
-      <BookingsCalendar lang={lang} tz={BOOKING_TZ} initialMonth={initialMonth} />
+      <BookingsCalendar lang={lang} tz={BOOKING_TZ} initialMonth={initialMonth} closedDows={closedDows} />
     </main>
   );
 }

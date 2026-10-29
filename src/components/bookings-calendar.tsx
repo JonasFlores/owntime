@@ -58,10 +58,12 @@ export default function BookingsCalendar({
   lang,
   tz,
   initialMonth,
+  closedDows,
 }: {
   lang: Lang;
   tz: string;
   initialMonth?: string;
+  closedDows: number[];
 }) {
   const t = dict[lang];
   const locale = lang === "pt" ? "pt-BR" : "en";
@@ -201,13 +203,15 @@ export default function BookingsCalendar({
   );
 
   // ---- build the day cells (locks + live appointments per day)
-  const cells: { iso: string; outside: boolean; locksOn: Lock[]; apptsOn: Appt[] }[] = [];
+  const cells: { iso: string; outside: boolean; past: boolean; closed: boolean; locksOn: Lock[]; apptsOn: Appt[] }[] = [];
   for (let i = 0; i < nCells; i++) {
     const iso = addDaysIso(firstCell, i);
     const b = dayBounds(iso, tz);
     cells.push({
       iso,
       outside: !iso.startsWith(month),
+      past: iso < todayInTz,
+      closed: closedDows.includes(new Date(`${iso}T12:00:00Z`).getUTCDay()),
       locksOn: (locks ?? []).filter((r) => rangesOverlap(r.starts_at, r.ends_at, b.starts_at, b.ends_at)),
       apptsOn: (appts ?? []).filter((x) => rangesOverlap(x.starts_at, x.ends_at, b.starts_at, b.ends_at)),
     });
@@ -273,7 +277,7 @@ export default function BookingsCalendar({
       <div className="mt-4 overflow-hidden rounded-2xl border border-line">
         <div className="grid grid-cols-7 gap-px bg-line">
           {dowLabels.map((d, i) => (
-            <span key={i} className="bg-panel py-2 text-center label">
+            <span key={i} className={(closedDows.includes(i) ? "bg-paper text-soft " : "bg-panel ") + "py-2 text-center label"}>
               {d}
             </span>
           ))}
@@ -295,6 +299,7 @@ export default function BookingsCalendar({
               ...c.locksOn.map(() => "bg-ink"),
               ...c.apptsOn.map((x) => (x.status === "pending" ? "bg-warn" : "bg-accent")),
             ].slice(0, 6);
+            const inactive = c.outside || c.past || c.closed;
             return (
               <button
                 key={c.iso}
@@ -303,14 +308,22 @@ export default function BookingsCalendar({
                 onClick={() => setSelected(c.iso)}
                 className={
                   "min-h-[7rem] p-1.5 text-left align-top transition-colors " +
-                  (c.outside ? "bg-paper" : "bg-panel") +
+                  (inactive ? "bg-paper" : "bg-panel") +
+                  (c.past ? " opacity-55" : "") +
                   (selected === c.iso ? " shadow-[inset_0_0_0_1.5px_#2f5240]" : "") +
-                  (!c.outside && selected !== c.iso ? " hover:bg-paper" : "")
+                  (selected !== c.iso ? " hover:bg-panel" : "")
                 }
               >
                 <span
                   className={
-                    "text-sm " + (c.outside ? "text-soft/40" : c.iso === todayInTz ? "font-semibold text-accent" : "text-ink")
+                    "text-sm " +
+                    (c.outside
+                      ? "text-soft/35"
+                      : c.iso === todayInTz
+                        ? "font-semibold text-accent"
+                        : c.past || c.closed
+                          ? "text-soft"
+                          : "text-ink")
                   }
                 >
                   {Number(c.iso.slice(8, 10))}
@@ -371,6 +384,10 @@ export default function BookingsCalendar({
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-ink" /> {t.locked}
         </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-sm border border-line bg-paper" /> {t.closed}
+        </span>
+        <span className="opacity-55">{t.pastDay}</span>
       </p>
 
       {msg && (
