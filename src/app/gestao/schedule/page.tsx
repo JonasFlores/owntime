@@ -177,14 +177,14 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
                   <input
                     type="time"
                     name={`start-${dow}`}
-                    defaultValue={day?.start_time ?? "09:00"}
+                    defaultValue={(day?.start_time ?? "09:00").slice(0, 5)}
                     className="input"
                     aria-label={`start ${label}`}
                   />
                   <input
                     type="time"
                     name={`end-${dow}`}
-                    defaultValue={day?.end_time ?? "18:00"}
+                    defaultValue={(day?.end_time ?? "18:00").slice(0, 5)}
                     className="input"
                     aria-label={`end ${label}`}
                   />

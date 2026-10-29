@@ -87,14 +87,15 @@ export async function saveService(fd: FormData) {
 /* ---------- weekly working hours ---------- */
 
 const hm = /^\d{2}:\d{2}$/;
+const normTime = (v: string) => v.slice(0, 5); // Postgres may return "09:00:00"
 
 export async function saveHours(fd: FormData) {
   const { sb } = await requireAdmin();
   const rows: { day_of_week: number; open: boolean; start_time: string; end_time: string }[] = [];
   for (let dow = 0; dow < 7; dow++) {
     const open = fd.get(`open-${dow}`) === "on";
-    const start = String(fd.get(`start-${dow}`) || "");
-    const end = String(fd.get(`end-${dow}`) || "");
+    const start = normTime(String(fd.get(`start-${dow}`) || ""));
+    const end = normTime(String(fd.get(`end-${dow}`) || ""));
     if (!hm.test(start) || !hm.test(end) || start >= end) {
       // malformed input on an open day is a real error, not a silent skip
       if (open) return redirect(setupUrl(fd, "err", "invalid-hours"));
@@ -136,8 +137,8 @@ export async function toggleDayLock(fd: FormData) {
 export async function saveLock(fd: FormData) {
   const { sb } = await requireAdmin();
   const date = String(fd.get("date") || "");
-  const start = String(fd.get("start") || "");
-  const end = String(fd.get("end") || "");
+  const start = normTime(String(fd.get("start") || ""));
+  const end = normTime(String(fd.get("end") || ""));
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !hm.test(start) || !hm.test(end)) {
     return redirect(setupUrl(fd, "err", "bad-period"));
   }
