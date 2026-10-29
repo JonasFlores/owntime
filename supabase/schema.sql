@@ -1,7 +1,7 @@
 -- ============================================================
--- Vibecoding — appointment scheduler · Supabase schema
--- Run once in the Supabase SQL editor (or as a migration).
--- After this: sign up your admin users via Auth, then insert
+-- Owntime — appointment scheduler · Supabase schema (idempotent)
+-- Run once in the Supabase SQL editor. Safe to re-run.
+-- After this: sign up your admin via Authentication, then insert
 -- their uid into admin_users (step at the bottom).
 -- ============================================================
 
@@ -92,26 +92,31 @@ as $$
     from working_hours
     where open and day_of_week = extract(dow from p_date)::int
     limit 1
+  ),
+  -- anchor slots to p_date so generate_series gets timestamps, not bare times
+  slots as (
+    select generate_series(
+             p_date + wh.start_time,
+             p_date + wh.end_time - make_interval(mins => s.duration_minutes),
+             interval '30 minutes'
+           ) as slot
+    from wh, s
+    where wh.end_time - wh.start_time > make_interval(mins => s.duration_minutes)
   )
   select to_char(x.slot, 'HH24:MI')
-  from s, wh
-  cross join lateral generate_series(
-    wh.start_time,
-    wh.end_time - make_interval(mins => s.duration_minutes),
-    interval '30 minutes'
-  ) as x(slot)
-  where ((p_date + x.slot) at time zone p_tz) > now()          -- not in the past
-    and not exists (                                           -- not taken (pending/approved)
+  from slots x
+  where (x.slot at time zone p_tz) > now()                       -- not in the past
+    and not exists (                                             -- not taken (pending/approved)
       select 1 from appointments a
       where a.status in ('pending','approved')
-        and tstzrange((p_date + x.slot) at time zone p_tz,
-                      (p_date + x.slot + make_interval(mins => s.duration_minutes)) at time zone p_tz)
+        and tstzrange(x.slot at time zone p_tz,
+                      (x.slot + make_interval(mins => (select duration_minutes from s))) at time zone p_tz)
             && tstzrange(a.starts_at, a.ends_at)
     )
-    and not exists (                                           -- not within a time-off lock
+    and not exists (                                             -- not within a time-off lock
       select 1 from time_off t
-      where tstzrange((p_date + x.slot) at time zone p_tz,
-                      (p_date + x.slot + make_interval(mins => s.duration_minutes)) at time zone p_tz)
+      where tstzrange(x.slot at time zone p_tz,
+                      (x.slot + make_interval(mins => (select duration_minutes from s))) at time zone p_tz)
             && tstzrange(t.starts_at, t.ends_at)
     );
 $$;
@@ -179,7 +184,7 @@ $$;
 grant execute on function public.get_available_slots(uuid, text, date) to anon, authenticated;
 grant execute on function public.get_available_days(uuid, text, date, date) to anon, authenticated;
 grant execute on function public.create_appointment(uuid, text, date, text, text, text, text, text) to anon, authenticated;
-grant execute on function public.is_admin() to authenticated; 
+grant execute on function public.is_admin() to authenticated;
 
 -- ---------- row level security ----------
 
@@ -190,30 +195,40 @@ alter table public.admin_users enable row level security;
 alter table public.appointments enable row level security;
 
 -- services: anyone can read active ones; admins manage all
+drop policy if exists "services_public_read" on public.services;
 create policy "services_public_read" on public.services for select
   using (active or public.is_admin());
+drop policy if exists "services_admin_write" on public.services;
 create policy "services_admin_write" on public.services for all
   using (public.is_admin()) with check (public.is_admin());
 
 -- working hours: calendar data is public; admins manage
+drop policy if exists "hours_public_read" on public.working_hours;
 create policy "hours_public_read" on public.working_hours for select using (true);
+drop policy if exists "hours_admin_write" on public.working_hours;
 create policy "hours_admin_write" on public.working_hours for all
   using (public.is_admin()) with check (public.is_admin());
 
 -- time off: needed to render locked days on the calendar
+drop policy if exists "timeoff_public_read" on public.time_off;
 create policy "timeoff_public_read" on public.time_off for select using (true);
+drop policy if exists "timeoff_admin_write" on public.time_off;
 create policy "timeoff_admin_write" on public.time_off for all
   using (public.is_admin()) with check (public.is_admin());
 
 -- admin_users: you can see your own membership; admins see all
+drop policy if exists "admins_read" on public.admin_users;
 create policy "admins_read" on public.admin_users for select
   using (user_id = auth.uid() or public.is_admin());
 
 -- appointments: guests may only insert pending; only admins may read/edit
+drop policy if exists "appointments_guest_insert" on public.appointments;
 create policy "appointments_guest_insert" on public.appointments for insert
   with check (status = 'pending');
+drop policy if exists "appointments_admin_read" on public.appointments;
 create policy "appointments_admin_read" on public.appointments for select
   using (public.is_admin());
+drop policy if exists "appointments_admin_update" on public.appointments;
 create policy "appointments_admin_update" on public.appointments for update
   using (public.is_admin()) with check (public.is_admin());
 -- NOTE: no delete policy on purpose — history is never destroyed.
@@ -236,8 +251,6 @@ insert into public.working_hours (day_of_week, start_time, end_time, open) value
 on conflict (day_of_week) do nothing;
 
 -- ---------- finally: register your admins ----------
--- 1. Authentication → Sign in with email/password signup enabled; have each
---    admin create their account on /admin/login.
--- 2. Then, for each account:
+-- Get the UUID from Authentication → Users after they sign up, then:
 -- insert into public.admin_users (user_id, email)
 --   values ('<uid-from-auth.users>', 'admin@yourstudio.com');
