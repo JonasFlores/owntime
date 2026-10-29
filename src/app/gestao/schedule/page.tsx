@@ -5,21 +5,11 @@ import { dict } from "@/lib/i18n";
 import { localeOf } from "@/lib/format";
 import type { ServiceRow } from "@/lib/booking";
 import { saveService, saveHours } from "@/app/gestao/actions";
-import { BOOKING_TZ } from "@/lib/tz";
 import ActionForm from "@/components/action-form";
 import AdminNav from "@/components/admin-nav";
 import SetupNotice from "@/components/setup-notice";
-import LockCalendar from "@/components/lock-calendar";
 
-const validMonth = (m: string | undefined): string => {
-  const q = m ?? "";
-  return /^[0-9]{4}-(10|11|12|0[1-9])$/.test(q) ? q
-    : new Intl.DateTimeFormat("en-CA", { timeZone: BOOKING_TZ }).format(new Date()).slice(0, 7);
-};
-
-export default async function AdminSchedule({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
-  const sp = await searchParams;
-  const month = validMonth(sp.m);
+export default async function AdminSchedule() {
   const lang = await getLang();
   const t = dict[lang];
   const locale = localeOf(lang);
@@ -34,10 +24,9 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
     );
 
   const { sb } = await requireAdmin();
-  const [svc, wh, to] = await Promise.all([
+  const [svc, wh] = await Promise.all([
     sb.from("services").select("*").order("sort_order"),
     sb.from("working_hours").select("*").order("day_of_week"),
-    sb.from("time_off").select("*").order("starts_at"),
   ]);
   const services = (svc.data ?? []) as unknown as ServiceRow[];
   const hours = new Map<number, { open: boolean; start_time: string; end_time: string }>(
@@ -46,9 +35,6 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
       { open: r.open, start_time: r.start_time, end_time: r.end_time },
     ]),
   );
-  // weekdays with no open hours are inactive in the lock calendar
-  const closedDows = [0, 1, 2, 3, 4, 5, 6].filter((d) => !hours.get(d)?.open);
-  const locks = (to.data ?? []) as { id: string; starts_at: string; ends_at: string; reason: string | null; note: string | null }[];
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 pt-12 pb-16">
@@ -166,17 +152,6 @@ export default async function AdminSchedule({ searchParams }: { searchParams: Pr
         </ActionForm>
       </section>
 
-      {/* ----- lock calendar (client component: weekday header + live month nav) ----- */}
-      <section className="mt-16">
-        <h2 className="label">{t.locks}</h2>
-        <LockCalendar
-          lang={lang}
-          tz={BOOKING_TZ}
-          initialMonth={month}
-          initialLocks={locks}
-          closedDows={closedDows}
-        />
-      </section>
     </main>
   );
 }

@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { dict, type Lang } from "@/lib/i18n";
 import { dayBounds, monthRange, shiftMonth } from "@/lib/tz";
+import { rangesOverlap } from "@/lib/time";
 import {
   decide,
   updateAppointment,
   toggleDayLock,
+  saveLock,
   removeLock,
   updateLockNote,
   type AdminResult,
@@ -74,6 +76,7 @@ export default function BookingsCalendar({
   const [selected, setSelected] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingLock, setEditingLock] = useState<string | null>(null);
+  const [addingBlock, setAddingBlock] = useState<"day" | "period" | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<AdminResult | null>(null);
 
@@ -145,11 +148,13 @@ export default function BookingsCalendar({
     if (res.ok) setEditingId(null);
   };
 
-  const blockDay = async () => {
-    if (!selected) return;
-    const fd = new FormData();
+  const submitBlock = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selected || !addingBlock) return;
+    const fd = new FormData(e.currentTarget);
     fd.set("date", selected);
-    await run(toggleDayLock, fd, { silent: true });
+    const res = await run(addingBlock === "day" ? toggleDayLock : saveLock, fd);
+    if (res.ok) setAddingBlock(null);
   };
 
   const unlock = async (id: string) => {
@@ -203,8 +208,8 @@ export default function BookingsCalendar({
     cells.push({
       iso,
       outside: !iso.startsWith(month),
-      locksOn: (locks ?? []).filter((r) => r.starts_at < b.ends_at && r.ends_at > b.starts_at),
-      apptsOn: (appts ?? []).filter((x) => x.starts_at < b.ends_at && x.ends_at > b.starts_at),
+      locksOn: (locks ?? []).filter((r) => rangesOverlap(r.starts_at, r.ends_at, b.starts_at, b.ends_at)),
+      apptsOn: (appts ?? []).filter((x) => rangesOverlap(x.starts_at, x.ends_at, b.starts_at, b.ends_at)),
     });
   }
 
@@ -212,13 +217,13 @@ export default function BookingsCalendar({
   const dayLocks = selected
     ? (locks ?? []).filter((r) => {
         const b = dayBounds(selected, tz);
-        return r.starts_at < b.ends_at && r.ends_at > b.starts_at;
+        return rangesOverlap(r.starts_at, r.ends_at, b.starts_at, b.ends_at);
       })
     : [];
   const dayAppts = selected
     ? (appts ?? []).filter((x) => {
         const b = dayBounds(selected, tz);
-        return x.starts_at < b.ends_at && x.ends_at > b.starts_at;
+        return rangesOverlap(x.starts_at, x.ends_at, b.starts_at, b.ends_at);
       })
     : [];
 
@@ -381,8 +386,8 @@ export default function BookingsCalendar({
         <section className="mt-10 rounded-2xl border border-line bg-panel p-5 sm:p-7">
           <h2 className="font-serif text-xl first-letter:uppercase">{dayLabel(selected)}</h2>
 
-          {/* block banner: shows the note, editable */}
-          {dayLocks.length > 0 ? (
+          {/* existing blocks: note is visible and editable */}
+          {dayLocks.length > 0 && (
             <div className="mt-4 flex flex-col gap-2">
               {dayLocks.map((lk) => (
                 <div key={lk.id} className="rounded-xl border border-line bg-paper px-4 py-3">
@@ -432,12 +437,64 @@ export default function BookingsCalendar({
                 </div>
               ))}
             </div>
-          ) : (
-            selected >= todayInTz && (
-              <button type="button" disabled={busy} onClick={() => void blockDay()} className="btn btn-sm mt-4">
-                {t.blockDay}
-              </button>
-            )
+          )}
+
+          {/* all blocking now lives beside the calendar, not in Setup */}
+          {selected >= todayInTz && (
+            <div className="mt-4">
+              {addingBlock === null ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setAddingBlock(dayLocks.some((lk) => lk.reason !== "locked-period") ? "period" : "day")}
+                  className="btn btn-sm"
+                >
+                  {t.newBlock}
+                </button>
+              ) : (
+                <form onSubmit={submitBlock} className="rounded-xl border border-dashed border-line bg-paper p-4">
+                  <div className="flex flex-wrap gap-2">
+                    {!dayLocks.some((lk) => lk.reason !== "locked-period") && (
+                      <button
+                        type="button"
+                        onClick={() => setAddingBlock("day")}
+                        className={"btn btn-sm " + (addingBlock === "day" ? "btn-primary" : "")}
+                      >
+                        {t.wholeDay}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setAddingBlock("period")}
+                      className={"btn btn-sm " + (addingBlock === "period" ? "btn-primary" : "")}
+                    >
+                      {t.timePeriod}
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-end gap-3">
+                    {addingBlock === "period" && (
+                      <>
+                        <input type="time" name="start" required className="input w-28" aria-label="start" />
+                        <input type="time" name="end" required className="input w-28" aria-label="end" />
+                      </>
+                    )}
+                    <input
+                      name="note"
+                      maxLength={200}
+                      placeholder={t.lockNotePh}
+                      className="input min-w-48 flex-1"
+                      aria-label={t.editNote}
+                    />
+                    <button type="submit" disabled={busy} className="btn btn-sm btn-primary">
+                      {t.save}
+                    </button>
+                    <button type="button" onClick={() => setAddingBlock(null)} className="btn btn-sm">
+                      {t.cancel}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           )}
 
           {/* the day's appointments */}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normTime, isValidHM, isCoherentWindow } from "@/lib/time";
+import { normTime, isValidHM, isCoherentWindow, rangesOverlap, sameInstant } from "@/lib/time";
 
 describe("normTime — the bug that broke weekly hours", () => {
   it("keeps HH:MM untouched", () => {
@@ -41,5 +41,30 @@ describe("isCoherentWindow", () => {
   it("rejects empty or malformed values", () => {
     expect(isCoherentWindow("", "18:00")).toBe(false);
     expect(isCoherentWindow("09:00", "18:00:00")).toBe(false);
+  });
+});
+
+describe("timestamp ranges", () => {
+  it("does not overlap ranges that only touch at a day boundary", () => {
+    expect(
+      rangesOverlap(
+        "2026-10-29T03:00:00.000Z",
+        "2026-10-30T03:00:00.000Z",
+        "2026-10-30T03:00:00+00:00",
+        "2026-10-31T03:00:00+00:00",
+      ),
+    ).toBe(false);
+  });
+
+  it("recognizes a real overlap and equivalent UTC formats", () => {
+    expect(
+      rangesOverlap(
+        "2026-10-30T03:00:00.000Z",
+        "2026-10-31T03:00:00.000Z",
+        "2026-10-30T12:00:00+00:00",
+        "2026-10-30T13:00:00+00:00",
+      ),
+    ).toBe(true);
+    expect(sameInstant("2026-10-30T03:00:00.000Z", "2026-10-30T03:00:00+00:00")).toBe(true);
   });
 });
