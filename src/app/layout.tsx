@@ -30,7 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={lang}>
       <body className="flex min-h-screen flex-col">
-        <header className="mx-auto flex w-full max-w-2xl items-center justify-between px-6 pt-8 pb-2">
+        <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-4 pt-8 pb-2 sm:px-6">
           <Link href="/" className="font-serif text-lg tracking-wide">
             {t.brand}
           </Link>
@@ -41,11 +41,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </nav>
         </header>
         <div className="flex-1">{children}</div>
-        <footer className="mx-auto w-full max-w-2xl px-6 pt-16 pb-10 text-xs text-soft">
-          © {new Date().getFullYear()} ·{" "}
-          <Link href="/gestao/login" className="underline decoration-line underline-offset-4 hover:text-ink">
-            admin
-          </Link>
+        <footer className="mx-auto w-full max-w-4xl px-4 pt-16 pb-10 text-xs text-soft sm:px-6">
+          © {new Date().getFullYear()} {t.brand} · by{" "}
+          <a
+            href="https://ownspace.com.br"
+            target="_blank"
+            rel="noreferrer"
+            className="underline decoration-line underline-offset-4 hover:text-ink"
+          >
+            Ownspace.com.br
+          </a>
         </footer>
       </body>
     </html>

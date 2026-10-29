@@ -16,7 +16,7 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
 
   if (!isConfigured)
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 pt-12 pb-8">
+      <main className="mx-auto w-full max-w-4xl px-4 pt-12 pb-8 sm:px-6">
         <AdminNav t={t} lang={lang} active="bookings" />
         <h1 className="mt-10 font-serif text-3xl">{t.tabBookings}</h1>
         <SetupNotice />
@@ -29,7 +29,7 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
   const closedDows = [0, 1, 2, 3, 4, 5, 6].filter((dow) => !openDows.has(dow));
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 pt-12 pb-16">
+    <main className="mx-auto w-full max-w-4xl px-4 pt-12 pb-16 sm:px-6">
       <AdminNav t={t} lang={lang} active="bookings" />
       <BookingsCalendar lang={lang} tz={BOOKING_TZ} initialMonth={initialMonth} closedDows={closedDows} />
     </main>

@@ -81,7 +81,7 @@ export default function MonthGrid({
   return (
     <>
       {nav}
-      <div className="mt-4 rounded-2xl border border-line bg-panel px-5 py-5 sm:px-7">
+      <div className="mt-4 rounded-2xl border border-line bg-panel px-2 py-4 sm:px-7 sm:py-5">
         <div className="grid grid-cols-7 text-center">
           {dowLabels.map((d, i) => (
             <span key={i} className="label py-2">
@@ -91,7 +91,7 @@ export default function MonthGrid({
         </div>
         <div className="grid grid-cols-7 gap-y-1.5 justify-items-center">
           {Array.from({ length: startDow }).map((_, i) => (
-            <span key={`e${i}`} className="h-10 w-10" />
+            <span key={`e${i}`} className="h-9 w-9 sm:h-10 sm:w-10" />
           ))}
           {Array.from({ length: nDays }, (_, i) => {
             const iso = `${month}-${pad(i + 1)}`;
@@ -107,7 +107,7 @@ export default function MonthGrid({
                     if (cfg.state !== "disabled" && onSelect) onSelect(iso);
                   }}
                   className={
-                    "flex h-10 w-10 items-center justify-center rounded-full text-sm transition-colors " +
+                    "flex h-9 w-9 items-center justify-center rounded-full text-sm transition-colors sm:h-10 sm:w-10 " +
                     CLASS[cfg.state]
                   }
                 >

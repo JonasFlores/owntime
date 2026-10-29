@@ -240,7 +240,7 @@ export default function BookingsCalendar({
   return (
     <>
       {/* month navigation — in place, no reload */}
-      <div className="mt-8 flex items-center justify-between">
+      <div className="mt-8 flex flex-col-reverse items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -606,9 +606,9 @@ export default function BookingsCalendar({
                       <form
                         key={x.id}
                         onSubmit={(e) => submitEdit(e, x.id)}
-                        className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-line bg-paper p-4"
+                        className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-line bg-paper p-4 sm:grid-cols-2"
                       >
-                        <p className="label col-span-2">{t.editTitle}</p>
+                        <p className="label sm:col-span-2">{t.editTitle}</p>
                         <input
                           type="date"
                           name="date"
@@ -640,7 +640,7 @@ export default function BookingsCalendar({
                           className="input"
                           aria-label={t.notes}
                         />
-                        <div className="col-span-2 flex justify-end gap-2">
+                        <div className="flex justify-end gap-2 sm:col-span-2">
                           <button type="button" className="btn btn-sm" onClick={() => setEditingId(null)}>
                             {t.cancel}
                           </button>

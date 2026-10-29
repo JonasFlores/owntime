@@ -6,7 +6,7 @@ export default function AdminNav({ t, lang, active }: { t: Dict; lang: Lang; act
   if (active === "login") return null;
   const base = "pb-1 text-sm border-b transition-colors";
   return (
-    <nav className="flex items-center gap-6">
+    <nav className="flex flex-wrap items-center gap-x-5 gap-y-3 sm:gap-x-6">
       <Link
         href="/gestao"
         className={active === "bookings" ? `${base} border-ink text-ink` : `${base} border-transparent text-soft hover:text-ink`}

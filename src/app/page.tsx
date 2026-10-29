@@ -10,7 +10,7 @@ export default async function Home() {
   const services = await getServices();
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 pt-16 pb-8 sm:pt-24">
+    <main className="mx-auto w-full max-w-4xl px-4 pt-16 pb-8 sm:px-6 sm:pt-24">
       <p className="label">{t.homeEyebrow}</p>
       <h1 className="mt-4 font-serif text-4xl leading-[1.12] tracking-tight sm:text-5xl">
         {t.homeTitle}

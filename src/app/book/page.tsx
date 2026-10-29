@@ -17,7 +17,7 @@ export default async function BookPage({
   const s = sp.service ? services.find((x) => x.id === sp.service) : undefined;
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 pt-10 pb-8">
+    <main className="mx-auto w-full max-w-4xl px-4 pt-10 pb-8 sm:px-6">
       <Link href="/" className="text-sm text-soft hover:text-ink">
         ← {t.back}
       </Link>
@@ -28,9 +28,9 @@ export default async function BookPage({
           <ul className="mt-6 divide-y divide-line border-y border-line">
             {services.map((x) => (
               <li key={x.id}>
-                <Link href={`/book?service=${x.id}`} className="flex items-baseline justify-between py-4">
-                  <span className="font-serif text-lg">{serviceName(x, lang)}</span>
-                  <span className="label">{x.duration_minutes} {t.minutes}</span>
+                <Link href={`/book?service=${x.id}`} className="flex items-baseline justify-between gap-3 py-4">
+                  <span className="min-w-0 font-serif text-lg">{serviceName(x, lang)}</span>
+                  <span className="label shrink-0">{x.duration_minutes} {t.minutes}</span>
                 </Link>
               </li>
             ))}

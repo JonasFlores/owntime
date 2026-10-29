@@ -13,7 +13,7 @@ export default async function LoginPage({
   const t = dict[lang];
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 pt-20 pb-8">
+    <main className="mx-auto w-full max-w-4xl px-4 pt-20 pb-8 sm:px-6">
       <p className="label">{t.adminEyebrow}</p>
       <h1 className="mt-3 font-serif text-3xl tracking-tight sm:text-4xl">{t.loginTitle}</h1>
 

@@ -16,7 +16,7 @@ export default async function AdminSchedule() {
 
   if (!isConfigured)
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 pt-12 pb-8">
+      <main className="mx-auto w-full max-w-4xl px-4 pt-12 pb-8 sm:px-6">
         <AdminNav t={t} lang={lang} active="setup" />
         <h1 className="mt-10 font-serif text-3xl">{t.tabSetup}</h1>
         <SetupNotice />
@@ -37,7 +37,7 @@ export default async function AdminSchedule() {
   );
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 pt-12 pb-16">
+    <main className="mx-auto w-full max-w-4xl px-4 pt-12 pb-16 sm:px-6">
       <AdminNav t={t} lang={lang} active="setup" />
 
       {/* ----- services ----- */}
@@ -49,7 +49,7 @@ export default async function AdminSchedule() {
               key={s.id}
               action={saveService}
               lang={lang}
-              className="grid grid-cols-2 gap-3 rounded-2xl border border-line bg-panel p-4 sm:grid-cols-[1fr_1fr_5.5rem_4rem_auto] sm:items-end"
+              className="grid grid-cols-1 gap-3 rounded-2xl border border-line bg-panel p-4 sm:grid-cols-[1fr_1fr_5.5rem_4rem_auto] sm:items-end"
             >
               <input type="hidden" name="id" value={s.id} />
               <label className="block">
@@ -85,7 +85,7 @@ export default async function AdminSchedule() {
           <ActionForm
             action={saveService}
             lang={lang}
-            className="grid grid-cols-2 gap-3 rounded-2xl border border-dashed border-line p-4 sm:grid-cols-[1fr_1fr_5.5rem_4rem_auto] sm:items-end"
+            className="grid grid-cols-1 gap-3 rounded-2xl border border-dashed border-line p-4 sm:grid-cols-[1fr_1fr_5.5rem_4rem_auto] sm:items-end"
           >
             <input type="hidden" name="id" value="" />
             <label className="block">
@@ -122,7 +122,7 @@ export default async function AdminSchedule() {
                 new Date(Date.UTC(2024, 0, 7 + dow, 12)), // 2024-01-07 was a Sunday
               );
               return (
-                <div key={dow} className="grid grid-cols-[7.5rem_6.5rem_1fr_1fr] items-center gap-3 py-3 sm:grid-cols-[9rem_6rem_1fr_1fr]">
+                <div key={dow} className="grid grid-cols-2 items-center gap-3 py-3 sm:grid-cols-[9rem_6rem_1fr_1fr]">
                   <span className="text-sm">{label}</span>
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" name={`open-${dow}`} defaultChecked={day?.open ?? false} className="accent-[#2f5240]" />
