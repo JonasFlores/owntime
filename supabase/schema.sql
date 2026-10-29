@@ -128,9 +128,9 @@ returns table (d date, c bigint)
 language sql stable security definer
 set search_path = public
 as $$
-  select g.g as d,
-         (select count(*) from public.get_available_slots(p_service, p_tz, g.g) as x(slot_time)) as c
-  from generate_series(p_from, p_to, interval '1 day') as g(g);
+  select g.g::date as d,
+         (select count(*) from public.get_available_slots(p_service, p_tz, g.g::date) as x(slot_time)) as c
+  from generate_series(p_from::timestamp, p_to::timestamp, interval '1 day') as g(g);
 $$;
 
 -- ---------- create appointment (atomic, conflict-safe) ----------
