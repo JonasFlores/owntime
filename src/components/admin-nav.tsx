@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signOut } from "@/app/gestao/actions";
 import type { Dict, Lang } from "@/lib/i18n";
+import PendingBadge from "@/components/pending-badge";
 
 export default function AdminNav({
   t,
@@ -25,16 +26,11 @@ export default function AdminNav({
       </Link>
       <Link
         href="/gestao?view=pending"
-        aria-label={`${t.tabPending}: ${pendingCount}`}
         className={active === "pending" ? `${base} border-ink text-ink` : `${base} border-transparent text-soft hover:text-ink`}
       >
         <span className="inline-flex items-center gap-2">
           {t.tabPending}
-          {pendingCount > 0 && (
-            <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-warn px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white">
-              {pendingCount > 99 ? "99+" : pendingCount}
-            </span>
-          )}
+          <PendingBadge initialCount={pendingCount} />
         </span>
       </Link>
       <Link
