@@ -24,9 +24,10 @@ export default async function AdminSchedule() {
     );
 
   const { sb } = await requireAdmin();
-  const [svc, wh] = await Promise.all([
+  const [svc, wh, pendingResult] = await Promise.all([
     sb.from("services").select("*").order("sort_order"),
     sb.from("working_hours").select("*").order("day_of_week"),
+    sb.from("appointments").select("id", { count: "exact", head: true }).eq("status", "pending"),
   ]);
   const services = (svc.data ?? []) as unknown as ServiceRow[];
   const hours = new Map<number, { open: boolean; start_time: string; end_time: string }>(
@@ -38,7 +39,7 @@ export default async function AdminSchedule() {
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 pt-12 pb-16 sm:px-6">
-      <AdminNav t={t} lang={lang} active="setup" />
+      <AdminNav t={t} lang={lang} active="setup" pendingCount={pendingResult.count ?? 0} />
 
       {/* ----- services ----- */}
       <section className="mt-12">

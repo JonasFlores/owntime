@@ -9,6 +9,7 @@ const KEY: Record<string, "msgSaved" | "msgApproved" | "msgDeclined" | "msgLocke
   saved: "msgSaved",
   approved: "msgApproved",
   declined: "msgDeclined",
+  rejected: "msgDeclined",
   locked: "msgLocked",
   unlocked: "msgUnlocked",
 };
