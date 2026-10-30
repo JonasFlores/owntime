@@ -44,7 +44,7 @@ O projeto oferece interface em **português e inglês**, com foco em uma experi�
 ### Instalação
 
 ```bash
-git clone <URL_DO_SEU_REPOSITORIO>
+git clone https://github.com/JonasFlores/owntime
 cd owntime
 npm install
 cp .env.example .env.local
