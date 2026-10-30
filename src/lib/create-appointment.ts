@@ -51,7 +51,7 @@ export async function submitAppointment(fd: FormData, clientHash: string): Promi
   });
 
   if (error) {
-    console.error("[booking] create_appointment failed", { code: error.code });
+    console.error("[booking] create_appointment failed", error);
     return { ok: false, error: "generic" };
   }
 

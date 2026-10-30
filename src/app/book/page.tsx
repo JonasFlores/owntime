@@ -7,7 +7,7 @@ import { isConfigured } from "@/lib/supabase";
 import BookingFlow from "@/components/booking-flow";
 import { currentMonthInTz } from "@/lib/tz";
 
-export const metadata: Metadata = { title: "OWNTIME" };
+export const metadata: Metadata = { title: "Owntime" };
 
 export default async function BookPage({
   searchParams,

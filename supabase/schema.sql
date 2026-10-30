@@ -240,8 +240,8 @@ as $$
   from generate_series(p_from::timestamp, p_to::timestamp, interval '1 day') as g(g)
   where p_to >= p_from
     and p_to - p_from <= 31
-    and p_from >= (now() at time zone p_tz)::date - 1
-    and p_to <= (now() at time zone p_tz)::date + 366;
+    and g.g >= (now() at time zone p_tz)::date
+    and g.g <= (now() at time zone p_tz)::date + 366;
 $$;
 
 -- ---------- create appointment (atomic, conflict-safe) ----------

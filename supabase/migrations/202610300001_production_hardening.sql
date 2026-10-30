@@ -91,8 +91,8 @@ as $$
     (select count(*) from public.get_available_slots(p_service, p_tz, g.g::date) x)
   from generate_series(p_from::timestamp, p_to::timestamp, interval '1 day') g(g)
   where p_to >= p_from and p_to - p_from <= 31
-    and p_from >= (now() at time zone p_tz)::date - 1
-    and p_to <= (now() at time zone p_tz)::date + 366;
+    and g.g >= (now() at time zone p_tz)::date
+    and g.g <= (now() at time zone p_tz)::date + 366;
 $$;
 
 drop function if exists public.create_appointment(uuid, text, date, text, text, text, text, text);

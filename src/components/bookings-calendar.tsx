@@ -229,7 +229,13 @@ export default function BookingsCalendar({
       past: iso < todayInTz,
       closed: closedDows.includes(new Date(`${iso}T12:00:00Z`).getUTCDay()),
       locksOn: (locks ?? []).filter((r) => rangesOverlap(r.starts_at, r.ends_at, b.starts_at, b.ends_at)),
-      apptsOn: (appts ?? []).filter((x) => rangesOverlap(x.starts_at, x.ends_at, b.starts_at, b.ends_at)),
+      // declined/cancelled never render in the grid — they stay only in the day detail panel
+      apptsOn: (appts ?? []).filter(
+        (x) =>
+          x.status !== "rejected" &&
+          x.status !== "cancelled" &&
+          rangesOverlap(x.starts_at, x.ends_at, b.starts_at, b.ends_at),
+      ),
     });
   }
 
@@ -372,10 +378,10 @@ export default function BookingsCalendar({
                         title={ch.label}
                         className={
                           "flex items-center gap-1 truncate rounded-md border bg-panel px-1.5 py-0.5 text-[11px] leading-5 " +
-                          (ch.pending ? "border-dashed border-warn/60 text-ink" : "border-line text-ink")
+                          (ch.pending ? "border-warn bg-warn/15 font-medium text-ink" : "border-line text-ink")
                         }
                       >
-                        <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + (ch.pending ? "bg-warn" : "bg-accent")} />
+                        <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + (ch.pending ? "bg-warn animate-pulse" : "bg-accent")} />
                         <span className="truncate">{ch.label}</span>
                       </span>
                     ),

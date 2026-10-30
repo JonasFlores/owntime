@@ -1,74 +1,116 @@
-# Owntime — appointment scheduler
+# Owntime
 
-Online appointment booking: guests request a slot, admin team approves/rejects, approved slots become unavailable.
+> Agendamento online simples, seguro e organizado para pequenos negócios e equipes de atendimento.
 
-**Stack**: Next.js (App Router) · Node.js LTS · Supabase (Postgres + Auth + RLS) · Tailwind · zod · dayjs · Resend
+O **Owntime** permite que clientes escolham um serviço, data e horário disponíveis sem precisar criar uma conta. Cada solicitação entra como pendente e é gerenciada por uma área administrativa: a equipe pode aprovar, recusar, configurar horários de trabalho, bloquear períodos e manter a agenda sincronizada com o Google Calendar.
 
-See [`PLAN.md`](./PLAN.md) for the full plan, data model, security checklist and build phases.
+O projeto oferece interface em **português e inglês**, com foco em uma experiência direta para quem agenda e em proteção dos dados de quem atende.
 
-## Status
-- [x] Plan agreed
-- [x] Phase 0 — repo setup (Next.js 15 + Tailwind v4 + Supabase SDK + zod + dayjs)
-- [x] Phase 1 — Supabase backend (`supabase/schema.sql` — run it in the Supabase SQL editor)
-- [x] Phase 2 — public booking site (calendar → free days → times → request form, PT/EN)
-- [x] Phase 3 — admin dashboard (bookings, services, weekly hours, day/period blocks)
-- [x] Phase 4 — notifications, transactional rate limits, RLS hardening and Google sync leases
-- [ ] Phase 5 — Hostinger deploy (see `DEPLOY.md`)
+## ✨ Funcionalidades
 
-## Getting started (local)
+- Agendamento público por serviço, data e horário;
+- Calendário com horários disponíveis calculados em tempo real;
+- Solicitações pendentes que já bloqueiam o horário escolhido;
+- Painel administrativo com autenticação para aprovar ou recusar agendamentos;
+- Gestão de serviços, duração, horário semanal e períodos indisponíveis;
+- Integração com **Google Calendar**: compromissos aprovados são enviados à agenda e eventos ocupados bloqueiam novos horários;
+- Notificações por e-mail via Resend;
+- Interface bilíngue (PT/EN);
+- Prevenção de agendamentos duplicados diretamente no banco de dados;
+- Validação, rate limiting e políticas de segurança para proteger o fluxo público.
+
+## 🧰 Stack
+
+| Camada | Tecnologias |
+| --- | --- |
+| Front-end e servidor | Next.js 16, React 19 e TypeScript |
+| Estilos | Tailwind CSS 4 |
+| Banco de dados e autenticação | Supabase (PostgreSQL, Auth e Row Level Security) |
+| Validação | Zod |
+| Datas | Day.js |
+| E-mails | Resend |
+| Integração de agenda | Google Calendar API |
+| Testes | Vitest |
+| Runtime | Node.js 22.12 ou superior |
+
+## 🚀 Como executar localmente
+
+### Pré-requisitos
+
+- Node.js 22.12 ou superior;
+- Um projeto no Supabase;
+- `npm`.
+
+### Instalação
 
 ```bash
+git clone <URL_DO_SEU_REPOSITORIO>
+cd owntime
 npm install
-cp .env.example .env.local   # fill in your Supabase URL + anon key
+cp .env.example .env.local
+```
+
+Preencha `.env.local` com as credenciais do Supabase e as demais integrações que desejar usar. **Nunca envie esse arquivo ao GitHub.**
+
+Para criar um banco novo, execute [`supabase/schema.sql`](./supabase/schema.sql) no SQL Editor do Supabase. Em uma base já existente, aplique os arquivos de [`supabase/migrations`](./supabase/migrations) na ordem indicada.
+
+Depois, crie o usuário administrador no Supabase Auth e adicione seu `user_id` à tabela `admin_users`.
+
+Inicie o ambiente de desenvolvimento:
+
+```bash
 npm run dev
 ```
 
-Use Node.js 22.12 or newer. Then run `supabase/schema.sql` in the Supabase SQL editor, create the admin in Supabase Auth,
-and add your `user_id` to `admin_users` (final step documented in the schema file).
+Abra [http://localhost:3000](http://localhost:3000) para acessar o site. O painel administrativo está em `/gestao`.
 
-For email notifications, verify a sending domain in Resend and configure
-`RESEND_API_KEY`, `RESEND_FROM_EMAIL` and `ADMIN_NOTIFICATION_EMAILS`.
+## 🔐 Variáveis de ambiente
 
-## Google Calendar integration
+O arquivo [`.env.example`](./.env.example) documenta todas as variáveis necessárias. As principais são:
 
-The admin page `/gestao/integrations` connects one shared Google Calendar. Approved
-appointments are exported to Google; opaque Google events are imported as busy
-blocks and are included in public availability calculations.
+- `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`;
+- `SUPABASE_SERVICE_ROLE_KEY` — somente no servidor;
+- `APPOINTMENT_TIMEZONE`;
+- credenciais do Resend para e-mails;
+- credenciais OAuth do Google para a sincronização do calendário;
+- segredos de rate limit, webhook e cron.
 
-1. For a new database, run `supabase/schema.sql`. For an existing database,
-   apply the files in `supabase/migrations/` in order instead of re-running the bootstrap.
-2. In Google Cloud, enable **Google Calendar API**, configure the OAuth consent
-   screen, and create a **Web application** OAuth client.
-3. Add the exact callback URL as an authorized redirect URI, for example:
-   `https://your-domain.com/api/integrations/google/callback`.
-4. Configure the `GOOGLE_*`, `SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET`
-   variables documented in `.env.example`.
-5. Open `/gestao/integrations`, connect Google, and select the calendar.
+> Variáveis com chaves ou segredos não devem receber o prefixo `NEXT_PUBLIC_`.
 
-For near-real-time inbound updates, set `GOOGLE_CALENDAR_WEBHOOK_URL` to:
-
-```text
-https://your-domain.com/api/integrations/google/webhook
-```
-
-It must be public HTTPS. Also schedule a fallback request every 5–15 minutes:
+## 🧪 Qualidade
 
 ```bash
-curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
-  https://your-domain.com/api/integrations/google/cron
+npm test
+npm run lint
+npm run typecheck
+npm run build
 ```
 
-The cron renews expiring notification channels, performs incremental sync, and
-retries failed event exports. Never expose `SUPABASE_SERVICE_ROLE_KEY`,
-`GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`, or `CRON_SECRET` to the
-browser.
-
-## Quality gate
+Ou execute toda a verificação de uma vez:
 
 ```bash
 npm run check
-npm audit
 ```
 
-The CI workflow runs audit, lint, typecheck, 42 unit/contract tests and a production build on Node 22.
-See [`PRODUCTION_AUDIT.md`](./PRODUCTION_AUDIT.md) before promoting a staging deployment.
+## ☁️ Deploy
+
+O projeto está preparado para rodar como aplicação Node.js. O passo a passo para publicar na Hostinger Cloud está em [DEPLOY.md](./DEPLOY.md).
+
+Antes de colocar em produção, revise também o [checklist de auditoria](./PRODUCTION_AUDIT.md), configure as variáveis de ambiente e valide a integração com Supabase, e-mail e Google Calendar.
+
+## 📁 Estrutura principal
+
+```text
+src/app/             Páginas, rotas e ações do Next.js
+src/components/      Componentes de interface
+src/lib/             Regras de negócio, integrações e validações
+supabase/            Schema e migrations do banco de dados
+```
+
+## 👨‍💻 Desenvolvimento
+
+Desenvolvido por **Jonas Flores** com o apoio do **OpenCode**.
+
+---
+
+Feito para tornar a rotina de agendamentos mais simples — para quem marca e para quem atende.

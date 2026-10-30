@@ -6,9 +6,9 @@ import { dict } from "@/lib/i18n";
 import LanguageSwitcher from "@/components/language-switcher";
 
 export const metadata: Metadata = {
-  title: "OWNTIME",
-  description: "Agendamento online simples e seguro.",
-  applicationName: "OWNTIME",
+  title: "Owntime",
+  description: "Agendamento online",
+  applicationName: "Owntime",
   manifest: "/manifest.webmanifest",
 };
 
