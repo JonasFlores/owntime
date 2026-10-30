@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { SubmitState } from "@/lib/create-appointment";
 import { dict, type Lang } from "@/lib/i18n";
 import MonthGrid, { type GridCellCfg } from "@/components/month-grid";
+import Spinner from "@/components/spinner";
 import { monthRange } from "@/lib/tz";
 
 interface Props {
@@ -23,8 +24,10 @@ export default function BookingFlow({ service, lang }: Props) {
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() + 1 });
   const monthStr = `${ym.y}-${pad(ym.m)}`;
   const [days, setDays] = useState<Record<string, number> | null>(null); // "2026-02-14" → free slot count
+  const [loadingDays, setLoadingDays] = useState(true);
   const [date, setDate] = useState<string | null>(null);
   const [slots, setSlots] = useState<string[] | null>(null);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [slot, setSlot] = useState<string | null>(null);
   const startedAt = useState(() => Date.now())[0];
   const [state, setState] = useState<SubmitState>({ ok: false });
@@ -35,13 +38,17 @@ export default function BookingFlow({ service, lang }: Props) {
     setDate(null);
     setSlot(null);
     setDays(null);
+    setLoadingDays(true);
     const ctrl = new AbortController();
     fetch(`/api/availability?service=${service.id}&month=${monthStr}`, { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : { days: [] }))
       .then((j) =>
         setDays(Object.fromEntries((j.days ?? []).map((d: { date: string; count: number }) => [d.date, d.count]))),
       )
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!ctrl.signal.aborted) setLoadingDays(false);
+      });
     return () => ctrl.abort();
   }, [monthStr, service.id]);
 
@@ -50,11 +57,15 @@ export default function BookingFlow({ service, lang }: Props) {
     if (!date) return;
     setSlot(null);
     setSlots(null);
+    setLoadingSlots(true);
     const ctrl = new AbortController();
     fetch(`/api/availability?service=${service.id}&date=${date}`, { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : { slots: [] }))
       .then((j) => setSlots(j.slots ?? []))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!ctrl.signal.aborted) setLoadingSlots(false);
+      });
     return () => ctrl.abort();
   }, [date, service.id]);
 
@@ -116,24 +127,33 @@ export default function BookingFlow({ service, lang }: Props) {
     <div className="mt-10">
       {/* calendar */}
       <p className="label">{t.pickDate}</p>
-      <div className="mt-4">
+      <div className={"mt-4 transition-opacity " + (loadingDays ? "opacity-50" : "opacity-100")}>
         <MonthGrid lang={lang} month={monthStr} cells={cells} onMove={moveMonth} onSelect={setDate} />
       </div>
-      {days && !Object.values(days).some((c) => c > 0) && (
-        <p className="mt-3 text-center text-sm text-soft">{t.noDays}</p>
+      {loadingDays ? (
+        <p className="mt-3 flex items-center justify-center gap-2 text-sm text-soft">
+          <Spinner className="h-3.5 w-3.5" /> {t.loading}
+        </p>
+      ) : (
+        days &&
+        !Object.values(days).some((c) => c > 0) && (
+          <p className="mt-3 text-center text-sm text-soft">{t.noDays}</p>
+        )
       )}
 
       {/* times */}
       {date && (
         <div className="mt-8">
           <p className="label">{t.pickTime}</p>
-          {!slots ? (
-            <p className="mt-3 text-sm text-soft">{t.loading}</p>
-          ) : slots.length === 0 ? (
+          {loadingSlots ? (
+            <p className="mt-3 flex items-center gap-2 text-sm text-soft">
+              <Spinner className="h-3.5 w-3.5" /> {t.loading}
+            </p>
+          ) : slots && slots.length === 0 ? (
             <p className="mt-3 text-sm text-soft">{t.noSlots}</p>
           ) : (
             <div className="mt-3 flex flex-wrap gap-2">
-              {slots.map((s) => (
+              {(slots ?? []).map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -193,7 +213,8 @@ export default function BookingFlow({ service, lang }: Props) {
               <input name="note" maxLength={500} placeholder={t.notesPh} className="input mt-2" />
             </label>
           </div>
-          <button type="submit" disabled={pending} className="btn btn-primary mt-8 w-full">
+          <button type="submit" disabled={pending} aria-busy={pending || undefined} className="btn btn-primary mt-8 w-full">
+            {pending && <Spinner className="h-4 w-4" />}
             {pending ? t.sending : t.send}
           </button>
         </form>

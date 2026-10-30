@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { dict, type Lang } from "@/lib/i18n";
 import { dayBounds, monthRange, shiftMonth } from "@/lib/tz";
 import { rangesOverlap } from "@/lib/time";
+import Spinner from "@/components/spinner";
 import {
   decide,
   updateAppointment,
@@ -32,6 +33,7 @@ interface Lock {
   ends_at: string;
   reason: string | null;
   note: string | null;
+  external?: boolean;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -80,6 +82,8 @@ export default function BookingsCalendar({
   const [editingLock, setEditingLock] = useState<string | null>(null);
   const [addingBlock, setAddingBlock] = useState<"day" | "period" | null>(null);
   const [busy, setBusy] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<AdminResult | null>(null);
 
   // ---- visible window = exactly the 6-week grid below (leading/trailing days included)
@@ -100,11 +104,14 @@ export default function BookingsCalendar({
   };
 
   useEffect(() => {
-    setAppts(null);
-    setLocks(null);
+    setLoading(true);
     setMsg(null);
     const ctrl = new AbortController();
-    load(ctrl.signal).catch(() => {});
+    load(ctrl.signal)
+      .catch(() => {})
+      .finally(() => {
+        if (!ctrl.signal.aborted) setLoading(false);
+      });
     return () => ctrl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winFrom, winTo]);
@@ -117,13 +124,16 @@ export default function BookingsCalendar({
     });
   }, [firstCell, lastCell, todayInTz]);
 
-  // ---- mutations: run server action, then reload both feeds in place
+  // ---- mutations: run server action, then reload both feeds in place.
+  // busyId identifies *which* control is running so the button itself spins.
   const run = async (
+    key: string,
     fn: (prev: AdminResult | null, fd: FormData) => Promise<AdminResult>,
     fd: FormData,
     opts?: { silent?: boolean },
   ) => {
     setBusy(true);
+    setBusyId(key);
     if (!opts?.silent) setMsg(null);
     try {
       const res = await fn(null, fd);
@@ -132,6 +142,7 @@ export default function BookingsCalendar({
       return res;
     } finally {
       setBusy(false);
+      setBusyId(null);
     }
   };
 
@@ -139,14 +150,14 @@ export default function BookingsCalendar({
     const fd = new FormData();
     fd.set("id", id);
     fd.set("status", status);
-    await run(decide, fd);
+    await run(`appt-${id}-${status}`, decide, fd);
   };
 
   const submitEdit = async (e: React.FormEvent<HTMLFormElement>, id: string) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     fd.set("id", id);
-    const res = await run(updateAppointment, fd);
+    const res = await run(`edit-${id}`, updateAppointment, fd);
     if (res.ok) setEditingId(null);
   };
 
@@ -155,21 +166,21 @@ export default function BookingsCalendar({
     if (!selected || !addingBlock) return;
     const fd = new FormData(e.currentTarget);
     fd.set("date", selected);
-    const res = await run(addingBlock === "day" ? toggleDayLock : saveLock, fd);
+    const res = await run("block", addingBlock === "day" ? toggleDayLock : saveLock, fd);
     if (res.ok) setAddingBlock(null);
   };
 
   const unlock = async (id: string) => {
     const fd = new FormData();
     fd.set("id", id);
-    await run(removeLock, fd, { silent: true });
+    await run(`lock-${id}`, removeLock, fd, { silent: true });
   };
 
   const submitLockNote = async (e: React.FormEvent<HTMLFormElement>, id: string) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     fd.set("id", id);
-    const res = await run(updateLockNote, fd);
+    const res = await run(`locknote-${id}`, updateLockNote, fd);
     if (res.ok) setEditingLock(null);
   };
 
@@ -271,10 +282,15 @@ export default function BookingsCalendar({
         </div>
         <p className="font-serif text-xl first-letter:uppercase">{monthLabel}</p>
       </div>
-      {(appts === null || locks === null) && <p className="mt-2 text-xs text-soft">{t.loading}</p>}
+      {(loading || busy) && (
+        <p role="status" aria-live="polite" className="mt-2 flex items-center gap-2 text-xs text-soft">
+          <Spinner className="h-3 w-3" />
+          {busy ? t.working : t.loading}
+        </p>
+      )}
 
       {/* the calendar grid (hairline borders via 1px gaps) */}
-      <div className="mt-4 overflow-hidden rounded-2xl border border-line">
+      <div className={"mt-4 overflow-hidden rounded-2xl border border-line transition-opacity " + (loading ? "opacity-50" : "opacity-100")}>
         <div className="grid grid-cols-7 gap-px bg-line">
           {dowLabels.map((d, i) => (
             <span key={i} className={(closedDows.includes(i) ? "bg-paper text-soft " : "bg-panel ") + "py-2 text-center label"}>
@@ -285,8 +301,9 @@ export default function BookingsCalendar({
         <div className="grid grid-cols-7 gap-px border-t border-line bg-line">
           {cells.map((c) => {
             const lockChips = c.locksOn.map((r) => {
-              const full = r.reason !== "locked-period";
-              return { key: `l${r.id}`, full, label: full ? r.note || t.locked : `${hhmm(r.starts_at)} ${r.note || ""}`.trim() };
+              const full = r.reason === "locked-day" || r.reason === "google-calendar-day";
+              const label = r.external ? t.googleBusy : r.note || t.locked;
+              return { key: `l${r.id}`, full, label: full ? label : `${hhmm(r.starts_at)} ${label}`.trim() };
             });
             const apptChips = c.apptsOn.map((x) => ({
               key: `a${x.id}`,
@@ -410,11 +427,13 @@ export default function BookingsCalendar({
                 <div key={lk.id} className="rounded-xl border border-line bg-paper px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="label">
-                      {lk.reason === "locked-period"
+                      {lk.external
+                        ? `${t.googleBusy} · ${hhmm(lk.starts_at)}–${hhmm(lk.ends_at)}`
+                        : lk.reason === "locked-period"
                         ? `${t.locked} · ${hhmm(lk.starts_at)}–${hhmm(lk.ends_at)}`
                         : t.locked}
                     </p>
-                    <div className="flex gap-4 text-sm">
+                    {!lk.external && <div className="flex gap-4 text-sm">
                       <button
                         type="button"
                         onClick={() => setEditingLock(editingLock === lk.id ? null : lk.id)}
@@ -426,14 +445,15 @@ export default function BookingsCalendar({
                         type="button"
                         disabled={busy}
                         onClick={() => void unlock(lk.id)}
-                        className="text-soft underline decoration-line underline-offset-4 hover:text-ink"
+                        className="inline-flex items-center gap-1.5 text-soft underline decoration-line underline-offset-4 hover:text-ink"
                       >
+                        {busyId === `lock-${lk.id}` && <Spinner className="h-3 w-3" />}
                         {t.unlock}
                       </button>
-                    </div>
+                    </div>}
                   </div>
                   {lk.note && editingLock !== lk.id && <p className="mt-1 text-sm italic">{lk.note}</p>}
-                  {editingLock === lk.id && (
+                  {!lk.external && editingLock === lk.id && (
                     <form key={lk.id} onSubmit={(e) => submitLockNote(e, lk.id)} className="mt-2 flex flex-wrap items-end gap-2">
                       <input
                         name="note"
@@ -444,6 +464,7 @@ export default function BookingsCalendar({
                         aria-label={t.editNote}
                       />
                       <button type="submit" disabled={busy} className="btn btn-sm btn-primary">
+                        {busyId === `locknote-${lk.id}` && <Spinner className="h-3 w-3" />}
                         {t.save}
                       </button>
                       <button type="button" className="btn btn-sm" onClick={() => setEditingLock(null)}>
@@ -463,7 +484,7 @@ export default function BookingsCalendar({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => setAddingBlock(dayLocks.some((lk) => lk.reason !== "locked-period") ? "period" : "day")}
+                  onClick={() => setAddingBlock(dayLocks.some((lk) => !lk.external && lk.reason !== "locked-period") ? "period" : "day")}
                   className="btn btn-sm"
                 >
                   {t.newBlock}
@@ -471,7 +492,7 @@ export default function BookingsCalendar({
               ) : (
                 <form onSubmit={submitBlock} className="rounded-xl border border-dashed border-line bg-paper p-4">
                   <div className="flex flex-wrap gap-2">
-                    {!dayLocks.some((lk) => lk.reason !== "locked-period") && (
+                    {!dayLocks.some((lk) => !lk.external && lk.reason !== "locked-period") && (
                       <button
                         type="button"
                         onClick={() => setAddingBlock("day")}
@@ -503,6 +524,7 @@ export default function BookingsCalendar({
                       aria-label={t.editNote}
                     />
                     <button type="submit" disabled={busy} className="btn btn-sm btn-primary">
+                      {busyId === "block" && <Spinner className="h-3 w-3" />}
                       {t.save}
                     </button>
                     <button type="button" onClick={() => setAddingBlock(null)} className="btn btn-sm">
@@ -557,6 +579,7 @@ export default function BookingsCalendar({
                               onClick={() => void setDecision(x.id, "approved")}
                               className="btn btn-sm btn-primary"
                             >
+                              {busyId === `appt-${x.id}-approved` && <Spinner className="h-3 w-3" />}
                               {t.approve}
                             </button>
                           )}
@@ -566,6 +589,7 @@ export default function BookingsCalendar({
                             onClick={() => void setDecision(x.id, "rejected")}
                             className="btn btn-sm"
                           >
+                            {busyId === `appt-${x.id}-rejected` && <Spinner className="h-3 w-3" />}
                             {t.reject}
                           </button>
                           {x.status === "approved" && (
@@ -646,6 +670,7 @@ export default function BookingsCalendar({
                             {t.cancel}
                           </button>
                           <button type="submit" disabled={busy} className="btn btn-sm btn-primary">
+                            {busyId === `edit-${x.id}` && <Spinner className="h-3 w-3" />}
                             {t.save}
                           </button>
                         </div>

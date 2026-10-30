@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { dict, type Lang } from "@/lib/i18n";
 import type { AdminResult } from "@/app/gestao/actions";
 
-const KEY: Record<string, "msgSaved" | "msgApproved" | "msgDeclined" | "msgLocked" | "msgUnlocked"> = {
+const KEY: Record<string, "msgSaved" | "msgApproved" | "msgDeclined" | "msgLocked" | "msgUnlocked" | "msgDeleted"> = {
   saved: "msgSaved",
   approved: "msgApproved",
   declined: "msgDeclined",
   rejected: "msgDeclined",
   locked: "msgLocked",
   unlocked: "msgUnlocked",
+  deleted: "msgDeleted",
 };
 
 /**
@@ -24,12 +25,15 @@ export default function ActionForm({
   lang,
   className,
   hideSuccess = false,
+  messageClassName = "",
   children,
 }: {
   action: (prev: AdminResult | null, fd: FormData) => Promise<AdminResult>;
   lang: Lang;
   className?: string;
   hideSuccess?: boolean;
+  /** extra classes for the inline message, e.g. col-span-full inside grids */
+  messageClassName?: string;
   children: React.ReactNode;
 }) {
   const [state, formAction, pending] = useActionState(action, null);
@@ -47,14 +51,15 @@ export default function ActionForm({
     : null;
 
   return (
-    <form action={formAction} className={className}>
+    <form action={formAction} aria-busy={pending || undefined} className={className}>
       {children}
       {state && !(hideSuccess && state.ok) && (
         <p
           role="status"
           className={
             "mt-3 flex flex-col gap-0.5 text-sm " +
-            (state.ok ? "text-accent" : "text-warn")
+            (state.ok ? "text-accent" : "text-warn") +
+            (messageClassName ? ` ${messageClassName}` : "")
           }
         >
           {text}

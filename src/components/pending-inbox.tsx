@@ -4,6 +4,7 @@ import { fmtShort, fmtTime } from "@/lib/format";
 import { serviceName, type AppointmentRow } from "@/lib/booking";
 import type { Dict, Lang } from "@/lib/i18n";
 import ActionForm from "@/components/action-form";
+import SubmitButton from "@/components/submit-button";
 
 function monthOf(iso: string, tz: string): string {
   const parts = new Intl.DateTimeFormat("en", {
@@ -80,16 +81,12 @@ export default function PendingInbox({
                   <ActionForm action={decide} lang={lang} className="inline-flex" hideSuccess>
                     <input type="hidden" name="id" value={x.id} />
                     <input type="hidden" name="status" value="approved" />
-                    <button type="submit" className="btn btn-sm btn-primary">
-                      {t.approve}
-                    </button>
+                    <SubmitButton className="btn btn-sm btn-primary">{t.approve}</SubmitButton>
                   </ActionForm>
                   <ActionForm action={decide} lang={lang} className="inline-flex" hideSuccess>
                     <input type="hidden" name="id" value={x.id} />
                     <input type="hidden" name="status" value="rejected" />
-                    <button type="submit" className="btn btn-sm">
-                      {t.reject}
-                    </button>
+                    <SubmitButton className="btn btn-sm">{t.reject}</SubmitButton>
                   </ActionForm>
                 </div>
               </div>

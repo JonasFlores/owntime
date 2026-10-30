@@ -57,6 +57,79 @@ create table if not exists public.appointments (
   decided_by uuid references auth.users(id)
 );
 
+-- Google Calendar integration. Public metadata is separated from OAuth secrets
+-- so even an authenticated admin cannot accidentally select a refresh token.
+create table if not exists public.google_calendar_connections (
+  id uuid primary key default gen_random_uuid(),
+  singleton boolean not null default true unique check (singleton),
+  connected_by uuid not null references auth.users(id),
+  google_account_email text,
+  calendar_id text not null,
+  calendar_name text,
+  calendar_timezone text,
+  sync_token text,
+  channel_id text,
+  channel_resource_id text,
+  channel_expires_at timestamptz,
+  status text not null default 'connected'
+    check (status in ('connected','syncing','error','revoked')),
+  last_synced_at timestamptz,
+  last_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.google_oauth_secrets (
+  connection_id uuid primary key references public.google_calendar_connections(id) on delete cascade,
+  refresh_token_encrypted text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.google_event_links (
+  id uuid primary key default gen_random_uuid(),
+  connection_id uuid not null references public.google_calendar_connections(id) on delete cascade,
+  appointment_id uuid not null references public.appointments(id) on delete cascade,
+  google_event_id text not null,
+  google_etag text,
+  last_synced_at timestamptz not null default now(),
+  unique (connection_id, appointment_id),
+  unique (connection_id, google_event_id)
+);
+
+-- Only busy intervals are copied. Event titles, descriptions and attendees are
+-- deliberately not persisted in Owntime.
+create table if not exists public.google_busy_events (
+  id uuid primary key default gen_random_uuid(),
+  connection_id uuid not null references public.google_calendar_connections(id) on delete cascade,
+  google_event_id text not null,
+  recurring_event_id text,
+  starts_at timestamptz not null,
+  ends_at timestamptz not null check (ends_at > starts_at),
+  all_day boolean not null default false,
+  google_etag text,
+  google_updated_at timestamptz,
+  last_seen_at timestamptz not null default now(),
+  unique (connection_id, google_event_id)
+);
+
+create index if not exists google_busy_events_range_idx
+  on public.google_busy_events using gist (tstzrange(starts_at, ends_at));
+
+create table if not exists public.calendar_sync_jobs (
+  id uuid primary key default gen_random_uuid(),
+  appointment_id uuid not null references public.appointments(id) on delete cascade,
+  operation text not null check (operation in ('upsert','delete')),
+  attempts int not null default 0,
+  next_attempt_at timestamptz not null default now(),
+  last_error text,
+  created_at timestamptz not null default now(),
+  processed_at timestamptz
+);
+
+create index if not exists calendar_sync_jobs_pending_idx
+  on public.calendar_sync_jobs (next_attempt_at) where processed_at is null;
+
 create index if not exists appointments_starts_idx on public.appointments (starts_at);
 
 -- Hard guarantee against double-booking, judged by the database itself:
@@ -120,7 +193,13 @@ as $$
       select 1 from time_off t
       where tstzrange(x.slot at time zone p_tz,
                       (x.slot + make_interval(mins => (select duration_minutes from s))) at time zone p_tz)
-            && tstzrange(t.starts_at, t.ends_at)
+             && tstzrange(t.starts_at, t.ends_at)
+    )
+    and not exists (                                             -- not busy in Google Calendar
+      select 1 from google_busy_events g
+      where tstzrange(x.slot at time zone p_tz,
+                      (x.slot + make_interval(mins => (select duration_minutes from s))) at time zone p_tz)
+            && tstzrange(g.starts_at, g.ends_at)
     );
 $$;
 
@@ -174,6 +253,11 @@ begin
     return jsonb_build_object('ok', false, 'error', 'closed');
   end if;
 
+  if exists (select 1 from google_busy_events g
+             where tstzrange(v_start, v_end) && tstzrange(g.starts_at, g.ends_at)) then
+    return jsonb_build_object('ok', false, 'error', 'taken');
+  end if;
+
   begin
     insert into appointments (service_id, starts_at, ends_at, status,
                               guest_name, guest_phone, guest_email, note)
@@ -200,6 +284,11 @@ alter table public.working_hours enable row level security;
 alter table public.time_off enable row level security;
 alter table public.admin_users enable row level security;
 alter table public.appointments enable row level security;
+alter table public.google_calendar_connections enable row level security;
+alter table public.google_oauth_secrets enable row level security;
+alter table public.google_event_links enable row level security;
+alter table public.google_busy_events enable row level security;
+alter table public.calendar_sync_jobs enable row level security;
 
 -- services: anyone can read active ones; admins manage all
 drop policy if exists "services_public_read" on public.services;
@@ -239,6 +328,21 @@ drop policy if exists "appointments_admin_update" on public.appointments;
 create policy "appointments_admin_update" on public.appointments for update
   using (public.is_admin()) with check (public.is_admin());
 -- NOTE: no delete policy on purpose — history is never destroyed.
+
+-- Integration metadata is admin-visible. OAuth secrets intentionally have no
+-- policy at all: only the server-side service-role client can access them.
+drop policy if exists "google_connections_admin" on public.google_calendar_connections;
+create policy "google_connections_admin" on public.google_calendar_connections for all
+  using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "google_links_admin_read" on public.google_event_links;
+create policy "google_links_admin_read" on public.google_event_links for select
+  using (public.is_admin());
+drop policy if exists "google_busy_admin_read" on public.google_busy_events;
+create policy "google_busy_admin_read" on public.google_busy_events for select
+  using (public.is_admin());
+drop policy if exists "sync_jobs_admin_read" on public.calendar_sync_jobs;
+create policy "sync_jobs_admin_read" on public.calendar_sync_jobs for select
+  using (public.is_admin());
 
 -- ---------- seed (adapt to your business) ----------
 

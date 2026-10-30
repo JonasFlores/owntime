@@ -2,6 +2,7 @@ import Link from "next/link";
 import { signOut } from "@/app/gestao/actions";
 import type { Dict, Lang } from "@/lib/i18n";
 import PendingBadge from "@/components/pending-badge";
+import SubmitButton from "@/components/submit-button";
 
 export default function AdminNav({
   t,
@@ -11,7 +12,7 @@ export default function AdminNav({
 }: {
   t: Dict;
   lang: Lang;
-  active: "bookings" | "pending" | "setup" | "login";
+  active: "bookings" | "pending" | "setup" | "integrations" | "login";
   pendingCount?: number;
 }) {
   if (active === "login") return null;
@@ -39,10 +40,14 @@ export default function AdminNav({
       >
         {t.tabSetup}
       </Link>
+      <Link
+        href="/gestao/integrations"
+        className={active === "integrations" ? `${base} border-ink text-ink` : `${base} border-transparent text-soft hover:text-ink`}
+      >
+        {t.tabIntegrations}
+      </Link>
       <form action={signOut} className="ml-auto">
-        <button type="submit" className="text-sm text-soft hover:text-ink">
-          {t.logout}
-        </button>
+        <SubmitButton className="cursor-pointer text-sm text-soft hover:text-ink">{t.logout}</SubmitButton>
       </form>
     </nav>
   );

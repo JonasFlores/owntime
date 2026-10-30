@@ -2,6 +2,7 @@ import { getLang } from "@/lib/lang";
 import { dict } from "@/lib/i18n";
 import { isConfigured } from "@/lib/supabase";
 import { signIn } from "@/app/gestao/actions";
+import SubmitButton from "@/components/submit-button";
 
 export default async function LoginPage({
   searchParams,
@@ -37,9 +38,7 @@ export default async function LoginPage({
           <span className="label">********</span>
           <input name="password" type="password" required className="input mt-2" autoComplete="current-password" />
         </label>
-        <button type="submit" className="btn btn-primary mt-1 w-full">
-          {t.loginBtn}
-        </button>
+        <SubmitButton className="btn btn-primary mt-1 w-full">{t.loginBtn}</SubmitButton>
       </form>
     </main>
   );

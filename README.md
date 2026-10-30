@@ -28,3 +28,37 @@ and add your `user_id` to `admin_users` (final step documented in the schema fil
 
 For email notifications, verify a sending domain in Resend and configure
 `RESEND_API_KEY`, `RESEND_FROM_EMAIL` and `ADMIN_NOTIFICATION_EMAILS`.
+
+## Google Calendar integration
+
+The admin page `/gestao/integrations` connects one shared Google Calendar. Approved
+appointments are exported to Google; opaque Google events are imported as busy
+blocks and are included in public availability calculations.
+
+1. Re-run `supabase/schema.sql` to create the integration tables and update the
+   availability functions.
+2. In Google Cloud, enable **Google Calendar API**, configure the OAuth consent
+   screen, and create a **Web application** OAuth client.
+3. Add the exact callback URL as an authorized redirect URI, for example:
+   `https://your-domain.com/api/integrations/google/callback`.
+4. Configure the `GOOGLE_*`, `SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET`
+   variables documented in `.env.example`.
+5. Open `/gestao/integrations`, connect Google, and select the calendar.
+
+For near-real-time inbound updates, set `GOOGLE_CALENDAR_WEBHOOK_URL` to:
+
+```text
+https://your-domain.com/api/integrations/google/webhook
+```
+
+It must be public HTTPS. Also schedule a fallback request every 5–15 minutes:
+
+```bash
+curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  https://your-domain.com/api/integrations/google/cron
+```
+
+The cron renews expiring notification channels, performs incremental sync, and
+retries failed event exports. Never expose `SUPABASE_SERVICE_ROLE_KEY`,
+`GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`, or `CRON_SECRET` to the
+browser.

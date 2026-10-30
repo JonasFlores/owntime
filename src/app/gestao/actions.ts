@@ -7,6 +7,7 @@ import { atTz, dayBounds } from "@/lib/tz";
 import { normTime, isCoherentWindow } from "@/lib/time";
 import { requireAdmin } from "@/lib/admin";
 import { sendBookingApproved } from "@/lib/email";
+import { enqueueAppointmentSync } from "@/lib/google-calendar";
 
 /** Every admin form action resolves to this state (useActionState pattern). */
 export type AdminResult = { ok: boolean; code?: string; detail?: string };
@@ -73,6 +74,7 @@ export async function decide(_prev: AdminResult | null, fd: FormData): Promise<A
       note: appointment.note,
     });
   }
+  await enqueueAppointmentSync(id.data, status === "approved" ? "upsert" : "delete");
   return ok(status);
 }
 
@@ -103,6 +105,34 @@ export async function saveService(_prev: AdminResult | null, fd: FormData): Prom
     ? await sb.from("services").update(row).eq("id", id)
     : await sb.from("services").insert(row);
   return error ? fail(error.message) : ok("saved");
+}
+
+/** Delete a service and cascade its appointments. Approved, upcoming
+ *  appointments are unlinked from Google Calendar before their rows go. */
+export async function deleteService(_prev: AdminResult | null, fd: FormData): Promise<AdminResult> {
+  const { sb } = await requireAdmin();
+  const id = z.string().uuid().safeParse(fd.get("id"));
+  if (!id.success) return fail("Invalid id");
+
+  const { data: appts, error: readError } = await sb
+    .from("appointments")
+    .select("id,status,starts_at")
+    .eq("service_id", id.data);
+  if (readError) return fail(readError.message);
+
+  const now = Date.now();
+  const upcomingApproved = (appts ?? []).filter(
+    (a) => a.status === "approved" && new Date(a.starts_at).getTime() >= now,
+  );
+  for (const a of upcomingApproved) await enqueueAppointmentSync(a.id, "delete");
+
+  /* The FK to services has no ON DELETE cascade — and we want it manual, so
+     the calendar sync above stays in control. Delete the bookings first. */
+  const { error: apptError } = await sb.from("appointments").delete().eq("service_id", id.data);
+  if (apptError) return fail(apptError.message);
+
+  const { error } = await sb.from("services").delete().eq("id", id.data);
+  return error ? fail(error.message) : ok("deleted");
 }
 
 /* ---------- weekly working hours ---------- */
@@ -251,5 +281,7 @@ export async function updateAppointment(_prev: AdminResult | null, fd: FormData)
     if ((error as { code?: string }).code === "23P01") return { ok: false, code: "taken", detail: error.message };
     return fail(error.message);
   }
+  const { data: updated } = await sb.from("appointments").select("status").eq("id", parsed.data.id).maybeSingle();
+  if (updated?.status === "approved") await enqueueAppointmentSync(parsed.data.id, "upsert");
   return ok("updated");
 }
