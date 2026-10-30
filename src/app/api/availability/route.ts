@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabase, isConfigured } from "@/lib/supabase";
 import { BOOKING_TZ } from "@/lib/tz";
+import { isIsoDate, isIsoMonth } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +10,8 @@ const schema = z
   .object({ service: z.string().uuid() })
   .and(
     z.union([
-      z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }),
-      z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
+      z.object({ month: z.string().refine(isIsoMonth) }),
+      z.object({ date: z.string().refine(isIsoDate) }),
     ]),
   );
 

@@ -36,8 +36,6 @@ interface Lock {
   external?: boolean;
 }
 
-const pad = (n: number) => String(n).padStart(2, "0");
-
 const addDaysIso = (iso: string, n: number) =>
   new Date(new Date(`${iso}T12:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
 
@@ -77,7 +75,9 @@ export default function BookingsCalendar({
   const [month, setMonth] = useState(initialMonth ?? todayInTz.slice(0, 7));
   const [appts, setAppts] = useState<Appt[] | null>(null);
   const [locks, setLocks] = useState<Lock[] | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(() =>
+    month === todayInTz.slice(0, 7) ? todayInTz : null,
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingLock, setEditingLock] = useState<string | null>(null);
   const [addingBlock, setAddingBlock] = useState<"day" | "period" | null>(null);
@@ -97,32 +97,37 @@ export default function BookingsCalendar({
   const load = async (signal?: AbortSignal) => {
     const [a, l] = await Promise.all([
       fetch(`/api/appointments?from=${encodeURIComponent(winFrom)}&to=${encodeURIComponent(winTo)}`, { signal }),
-      fetch("/api/locks", { signal }),
+      fetch(`/api/locks?from=${encodeURIComponent(winFrom)}&to=${encodeURIComponent(winTo)}`, { signal }),
     ]);
     if (a.ok) setAppts(((await a.json()).appointments ?? []) as Appt[]);
     if (l.ok) setLocks(((await l.json()).locks ?? []) as Lock[]);
   };
 
   useEffect(() => {
-    setLoading(true);
-    setMsg(null);
     const ctrl = new AbortController();
-    load(ctrl.signal)
+    Promise.all([
+      fetch(`/api/appointments?from=${encodeURIComponent(winFrom)}&to=${encodeURIComponent(winTo)}`, { signal: ctrl.signal }),
+      fetch(`/api/locks?from=${encodeURIComponent(winFrom)}&to=${encodeURIComponent(winTo)}`, { signal: ctrl.signal }),
+    ])
+      .then(async ([appointmentsResponse, locksResponse]) => {
+        if (appointmentsResponse.ok) {
+          setAppts(((await appointmentsResponse.json()).appointments ?? []) as Appt[]);
+        }
+        if (locksResponse.ok) setLocks(((await locksResponse.json()).locks ?? []) as Lock[]);
+      })
       .catch(() => {})
       .finally(() => {
         if (!ctrl.signal.aborted) setLoading(false);
       });
     return () => ctrl.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winFrom, winTo]);
 
-  // keep a sensible selection across month navigation
-  useEffect(() => {
-    setSelected((prev) => {
-      if (prev && prev >= firstCell && prev <= lastCell) return prev;
-      return todayInTz >= firstCell && todayInTz <= lastCell ? todayInTz : null;
-    });
-  }, [firstCell, lastCell, todayInTz]);
+  const navigateMonth = (next: string) => {
+    setLoading(true);
+    setMsg(null);
+    setSelected(next === todayInTz.slice(0, 7) ? todayInTz : null);
+    setMonth(next);
+  };
 
   // ---- mutations: run server action, then reload both feeds in place.
   // busyId identifies *which* control is running so the button itself spins.
@@ -257,7 +262,7 @@ export default function BookingsCalendar({
             type="button"
             disabled={busy}
             aria-label={t.prevM}
-            onClick={() => setMonth(shiftMonth(month, -1))}
+            onClick={() => navigateMonth(shiftMonth(month, -1))}
             className="btn btn-sm border-transparent px-3 text-soft hover:border-line"
           >
             ‹
@@ -266,7 +271,7 @@ export default function BookingsCalendar({
             type="button"
             disabled={busy}
             aria-label={t.nextM}
-            onClick={() => setMonth(shiftMonth(month, 1))}
+            onClick={() => navigateMonth(shiftMonth(month, 1))}
             className="btn btn-sm border-transparent px-3 text-soft hover:border-line"
           >
             ›
@@ -274,7 +279,7 @@ export default function BookingsCalendar({
           <button
             type="button"
             disabled={busy}
-            onClick={() => setMonth(todayInTz.slice(0, 7))}
+            onClick={() => navigateMonth(todayInTz.slice(0, 7))}
             className="btn btn-sm border-transparent px-3 text-soft hover:border-line"
           >
             {t.today}
@@ -624,7 +629,7 @@ export default function BookingsCalendar({
                         </>
                       )}
                     </p>
-                    {x.note && !dead && <p className="mt-1 text-sm italic text-soft">"{x.note}"</p>}
+                    {x.note && !dead && <p className="mt-1 text-sm italic text-soft"><q>{x.note}</q></p>}
 
                     {editingId === x.id && (
                       <form

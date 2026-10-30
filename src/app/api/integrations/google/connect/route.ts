@@ -1,19 +1,17 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { adminGate } from "@/lib/admin";
-import { googleAuthorizationUrl, googleConfigured } from "@/lib/google-calendar";
+import { googleAuthorizationUrl, googleConfigured, resolveGoogleRedirectUri } from "@/lib/google-calendar";
 
-// The redirect URI is derived from the request origin, not from GOOGLE_OAUTH_REDIRECT_URI,
-// so the state cookie and the Google callback always share the same browser origin
-// (localhost for local dev, *.ngrok-free.dev for tunnel testing, prod domain in production).
-// Every origin used this way must be listed under "Authorized redirect URIs" in Google Cloud.
+// Select the callback registered for this request's origin. The authorize request
+// and token exchange must use this exact same value or Google rejects the flow.
 export async function GET(req: NextRequest) {
   const gate = await adminGate();
   if (!gate.ok) return NextResponse.redirect(new URL("/gestao/login", req.nextUrl.origin));
   if (!googleConfigured) {
     return NextResponse.json({ error: "google_not_configured" }, { status: 503 });
   }
-  const redirectUri = new URL("/api/integrations/google/callback", req.nextUrl.origin).toString();
+  const redirectUri = resolveGoogleRedirectUri(req.nextUrl.origin);
   const state = crypto.randomBytes(32).toString("base64url");
   const response = NextResponse.redirect(googleAuthorizationUrl(state, redirectUri));
   const cookieOptions = {

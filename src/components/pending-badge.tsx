@@ -8,23 +8,21 @@ import { useCallback, useEffect, useState } from "react";
  * endpoint performs only a HEAD/count query. It also refreshes on tab focus.
  */
 export default function PendingBadge({ initialCount }: { initialCount: number }) {
-  const [count, setCount] = useState(initialCount);
-
-  useEffect(() => setCount(initialCount), [initialCount]);
+  const [remoteCount, setRemoteCount] = useState<number | null>(null);
+  const count = remoteCount ?? initialCount;
 
   const refresh = useCallback(async () => {
     try {
       const response = await fetch("/api/appointments/pending-count", { cache: "no-store" });
       if (!response.ok) return;
       const body = (await response.json()) as { count?: number };
-      if (typeof body.count === "number") setCount(body.count);
+      if (typeof body.count === "number") setRemoteCount(body.count);
     } catch {
       // Keep the last known count; the next interval/focus retries quietly.
     }
   }, []);
 
   useEffect(() => {
-    void refresh();
     const interval = window.setInterval(() => void refresh(), 10_000);
     const onFocus = () => void refresh();
     const onVisibility = () => {

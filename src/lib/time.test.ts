@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normTime, isValidHM, isCoherentWindow, rangesOverlap, sameInstant } from "@/lib/time";
+import { normTime, isValidHM, isCoherentWindow, rangesOverlap, resolveAppointmentWindow, sameInstant } from "@/lib/time";
 
 describe("normTime — the bug that broke weekly hours", () => {
   it("keeps HH:MM untouched", () => {
@@ -24,6 +24,35 @@ describe("isValidHM", () => {
     expect(isValidHM("09:00:00")).toBe(false); // seconds not accepted
     expect(isValidHM("")).toBe(false);
     expect(isValidHM("ab:cd")).toBe(false);
+    expect(isValidHM("23:59")).toBe(true);
+    expect(isValidHM("24:00")).toBe(false);
+    expect(isValidHM("09:60")).toBe(false);
+    expect(isValidHM("99:99")).toBe(false);
+  });
+});
+
+describe("resolveAppointmentWindow", () => {
+  it("keeps a coherent explicit end on the same date", () => {
+    expect(resolveAppointmentWindow("2026-10-30", "09:00", "10:00")).toEqual({
+      startDate: "2026-10-30",
+      endDate: "2026-10-30",
+      start: "09:00",
+      end: "10:00",
+    });
+  });
+
+  it("rolls only the end into the next day when duration crosses midnight", () => {
+    expect(resolveAppointmentWindow("2026-10-30", "23:30", "", 60)).toEqual({
+      startDate: "2026-10-30",
+      endDate: "2026-10-31",
+      start: "23:30",
+      end: "00:30",
+    });
+  });
+
+  it("rejects impossible or inverted explicit windows", () => {
+    expect(resolveAppointmentWindow("2026-10-30", "25:00", "", 60)).toBeNull();
+    expect(resolveAppointmentWindow("2026-10-30", "18:00", "09:00", 60)).toBeNull();
   });
 });
 

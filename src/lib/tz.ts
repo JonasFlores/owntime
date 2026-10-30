@@ -8,6 +8,10 @@ dayjs.extend(timezone);
 /** Fixed business timezone (IANA name) — the single source of truth for calendar math. */
 export const BOOKING_TZ = process.env.APPOINTMENT_TIMEZONE || "America/Sao_Paulo";
 
+export function currentMonthInTz(tz: string = BOOKING_TZ): string {
+  return dayjs().tz(tz).format("YYYY-MM");
+}
+
 /** Convert a business-local date (and optional time) to a UTC ISO string. */
 export function atTz(date: string, time = "00:00:00", tz: string = BOOKING_TZ): string {
   return dayjs.tz(`${date} ${time}`, tz).toISOString();

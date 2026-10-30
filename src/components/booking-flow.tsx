@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SubmitState } from "@/lib/create-appointment";
 import { dict, type Lang } from "@/lib/i18n";
@@ -11,17 +11,17 @@ import { monthRange } from "@/lib/tz";
 interface Props {
   service: { id: string; name: string; duration: number };
   lang: Lang;
+  initialMonth: string;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-export default function BookingFlow({ service, lang }: Props) {
+export default function BookingFlow({ service, lang, initialMonth }: Props) {
   const t = dict[lang];
   const router = useRouter();
   const locale = lang === "pt" ? "pt-BR" : "en";
-  const now = new Date();
-
-  const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() + 1 });
+  const [initialYear, initialMonthNumber] = initialMonth.split("-").map(Number);
+  const [ym, setYm] = useState({ y: initialYear, m: initialMonthNumber });
   const monthStr = `${ym.y}-${pad(ym.m)}`;
   const [days, setDays] = useState<Record<string, number> | null>(null); // "2026-02-14" → free slot count
   const [loadingDays, setLoadingDays] = useState(true);
@@ -32,13 +32,10 @@ export default function BookingFlow({ service, lang }: Props) {
   const startedAt = useState(() => Date.now())[0];
   const [state, setState] = useState<SubmitState>({ ok: false });
   const [pending, setPending] = useState(false);
+  const detailsFormRef = useRef<HTMLFormElement>(null);
 
   // month overview
   useEffect(() => {
-    setDate(null);
-    setSlot(null);
-    setDays(null);
-    setLoadingDays(true);
     const ctrl = new AbortController();
     fetch(`/api/availability?service=${service.id}&month=${monthStr}`, { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : { days: [] }))
@@ -55,9 +52,6 @@ export default function BookingFlow({ service, lang }: Props) {
   // day detail
   useEffect(() => {
     if (!date) return;
-    setSlot(null);
-    setSlots(null);
-    setLoadingSlots(true);
     const ctrl = new AbortController();
     fetch(`/api/availability?service=${service.id}&date=${date}`, { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : { slots: [] }))
@@ -72,6 +66,11 @@ export default function BookingFlow({ service, lang }: Props) {
   useEffect(() => {
     if (state.ok) router.push("/thanks");
   }, [state.ok, router]);
+
+  useEffect(() => {
+    if (!slot) return;
+    detailsFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [slot]);
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -92,11 +91,21 @@ export default function BookingFlow({ service, lang }: Props) {
   };
 
   const moveMonth = (d: number) => {
+    setDate(null);
     setSlot(null);
+    setDays(null);
+    setLoadingDays(true);
     setYm((prev) => {
       const z = prev.m + d;
       return z < 1 ? { y: prev.y - 1, m: 12 } : z > 12 ? { y: prev.y + 1, m: 1 } : { ...prev, m: z };
     });
+  };
+
+  const selectDate = (nextDate: string) => {
+    setSlot(null);
+    setSlots(null);
+    setLoadingSlots(true);
+    setDate(nextDate);
   };
 
   // calendar cells: only days with free slots are selectable
@@ -128,7 +137,7 @@ export default function BookingFlow({ service, lang }: Props) {
       {/* calendar */}
       <p className="label">{t.pickDate}</p>
       <div className={"mt-4 transition-opacity " + (loadingDays ? "opacity-50" : "opacity-100")}>
-        <MonthGrid lang={lang} month={monthStr} cells={cells} onMove={moveMonth} onSelect={setDate} />
+        <MonthGrid lang={lang} month={monthStr} cells={cells} onMove={moveMonth} onSelect={selectDate} />
       </div>
       {loadingDays ? (
         <p className="mt-3 flex items-center justify-center gap-2 text-sm text-soft">
@@ -174,7 +183,11 @@ export default function BookingFlow({ service, lang }: Props) {
 
       {/* request form */}
       {date && slot && (
-        <form onSubmit={submit} className="mt-10 rounded-2xl border border-line bg-panel p-6 sm:p-8">
+        <form
+          ref={detailsFormRef}
+          onSubmit={submit}
+          className="mt-10 scroll-mt-6 rounded-2xl border border-line bg-panel p-6 sm:p-8"
+        >
           <p className="label">{t.yourDetails}</p>
           <p className="mt-3 font-serif text-xl">
             {service.name} · {dateLabel?.charAt(0).toUpperCase()}
@@ -189,7 +202,7 @@ export default function BookingFlow({ service, lang }: Props) {
           <input type="hidden" name="ts" value={startedAt} />
 
           {state.error && (
-            <p className="mt-5 rounded-lg border border-warn/40 bg-warn/5 px-4 py-3 text-sm text-warn">
+            <p role="alert" aria-live="polite" className="mt-5 rounded-lg border border-warn/40 bg-warn/5 px-4 py-3 text-sm text-warn">
               {errorText[state.error] ?? t.errGeneric}
             </p>
           )}

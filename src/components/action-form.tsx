@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { dict, type Lang } from "@/lib/i18n";
 import type { AdminResult } from "@/app/gestao/actions";
 
-const KEY: Record<string, "msgSaved" | "msgApproved" | "msgDeclined" | "msgLocked" | "msgUnlocked" | "msgDeleted"> = {
+const KEY: Record<string, "msgSaved" | "msgApproved" | "msgDeclined" | "msgLocked" | "msgUnlocked" | "msgDeleted" | "msgArchived"> = {
   saved: "msgSaved",
   approved: "msgApproved",
   declined: "msgDeclined",
@@ -13,6 +13,7 @@ const KEY: Record<string, "msgSaved" | "msgApproved" | "msgDeclined" | "msgLocke
   locked: "msgLocked",
   unlocked: "msgUnlocked",
   deleted: "msgDeleted",
+  archived: "msgArchived",
 };
 
 /**

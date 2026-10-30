@@ -4,12 +4,12 @@ import { getLang } from "@/lib/lang";
 import { dict } from "@/lib/i18n";
 import { localeOf } from "@/lib/format";
 import type { ServiceRow } from "@/lib/booking";
+import { SERVICE_GRID } from "@/lib/service-grid";
 import { saveService, saveHours, deleteService } from "@/app/gestao/actions";
 import ActionForm from "@/components/action-form";
 import ConfirmDelete from "@/components/confirm-delete";
-import ServicesFilter, { GRID } from "@/components/services-filter";
+import ServicesFilter from "@/components/services-filter";
 import SubmitButton from "@/components/submit-button";
-import AdminNav from "@/components/admin-nav";
 import SetupNotice from "@/components/setup-notice";
 
 const emptyUsage = { upcoming: 0, pending: 0, history: 0, total: 0 };
@@ -27,19 +27,17 @@ export default async function AdminSchedule({
 
   if (!isConfigured)
     return (
-      <main className="mx-auto w-full max-w-4xl px-4 pt-12 pb-8 sm:px-6">
-        <AdminNav t={t} lang={lang} active="setup" />
+      <>
         <h1 className="mt-10 font-serif text-3xl">{t.tabSetup}</h1>
         <SetupNotice />
-      </main>
+      </>
     );
 
   const { sb } = await requireAdmin();
-  const [svc, wh, pendingResult, apptsResult] = await Promise.all([
+  const [svc, wh, usageResult] = await Promise.all([
     sb.from("services").select("*"),
     sb.from("working_hours").select("*").order("day_of_week"),
-    sb.from("appointments").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    sb.from("appointments").select("service_id,status,starts_at"),
+    sb.rpc("service_booking_usage"),
   ]);
   const services = (svc.data ?? []) as unknown as ServiceRow[];
 
@@ -49,17 +47,17 @@ export default async function AdminSchedule({
     (a, b) => collator.compare(a.name_pt, b.name_pt) || collator.compare(a.name_en, b.name_en),
   );
 
-  // bookings per service: feeds the table column and the delete confirmation
-  const now = Date.now();
-  const usage = new Map<string, { upcoming: number; pending: number; history: number; total: number }>();
-  for (const a of (apptsResult.data ?? []) as { service_id: string; status: string; starts_at: string }[]) {
-    const u = usage.get(a.service_id) ?? { ...emptyUsage };
-    u.total++;
-    if (a.status === "pending") u.pending++;
-    else if (a.status === "approved" && new Date(a.starts_at).getTime() >= now) u.upcoming++;
-    else u.history++;
-    usage.set(a.service_id, u);
-  }
+  // Aggregated in Postgres: setup cost stays constant as booking history grows.
+  const usage = new Map<string, { upcoming: number; pending: number; history: number; total: number }>(
+    ((usageResult.data ?? []) as Array<{ service_id: string; upcoming: number; pending: number; history: number; total: number }>).map(
+      (row) => [row.service_id, {
+        upcoming: Number(row.upcoming),
+        pending: Number(row.pending),
+        history: Number(row.history),
+        total: Number(row.total),
+      }],
+    ),
+  );
 
   const counts = {
     all: services.length,
@@ -85,7 +83,7 @@ export default async function AdminSchedule({
   const serviceRow = (s: ServiceRow) => {
     const u = usage.get(s.id) ?? emptyUsage;
     return (
-      <div key={s.id} className={`${GRID} px-4 py-3 sm:py-2.5`}>
+      <div key={s.id} className={`${SERVICE_GRID} px-4 py-3 lg:py-2.5`}>
         <ActionForm
           action={saveService}
           lang={lang}
@@ -95,15 +93,15 @@ export default async function AdminSchedule({
         >
           <input type="hidden" name="id" value={s.id} />
           <label className="block">
-            <span className="label sm:hidden">{t.namePt}</span>
-            <input name="name_pt" defaultValue={s.name_pt} required maxLength={80} className="input sm:mt-0" />
+            <span className="label lg:hidden">{t.namePt}</span>
+            <input name="name_pt" defaultValue={s.name_pt} required maxLength={80} className="input mt-1.5 lg:mt-0" />
           </label>
           <label className="block">
-            <span className="label sm:hidden">{t.nameEn}</span>
-            <input name="name_en" defaultValue={s.name_en} required maxLength={80} className="input sm:mt-0" />
+            <span className="label lg:hidden">{t.nameEn}</span>
+            <input name="name_en" defaultValue={s.name_en} required maxLength={80} className="input mt-1.5 lg:mt-0" />
           </label>
           <label className="block">
-            <span className="label sm:hidden">{t.duration}</span>
+            <span className="label lg:hidden">{t.duration}</span>
             <input
               name="duration_minutes"
               type="number"
@@ -113,7 +111,7 @@ export default async function AdminSchedule({
               defaultValue={s.duration_minutes}
               required
               aria-label={t.duration}
-              className="input sm:mt-0"
+              className="input mt-1.5 lg:mt-0"
             />
           </label>
           <label className="flex items-center gap-2 text-sm">
@@ -121,7 +119,7 @@ export default async function AdminSchedule({
             <span className={s.active ? "text-accent" : "text-soft"}>{t.active}</span>
           </label>
           <div className="text-sm text-soft" title={t.bookings}>
-            <span className="label mr-1.5 sm:hidden">{t.bookings}</span>
+            <span className="label mr-1.5 lg:hidden">{t.bookings}</span>
             {u.total}
             {u.pending > 0 && (
               <span className="ml-2 text-xs text-warn">
@@ -137,9 +135,7 @@ export default async function AdminSchedule({
   };
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 pt-12 pb-16 sm:px-6">
-      <AdminNav t={t} lang={lang} active="setup" pendingCount={pendingResult.count ?? 0} />
-
+    <>
       {/* ----- services ----- */}
       <section className="mt-12">
         <ServicesFilter
@@ -151,19 +147,19 @@ export default async function AdminSchedule({
         />
 
         {/* new service — same grid, dashed frame to signal "empty row" */}
-        <div className={`${GRID} mt-3 gap-x-4 rounded-2xl border border-dashed border-line p-4 sm:p-4`}>
+        <div className={`${SERVICE_GRID} mt-3 rounded-2xl border border-dashed border-line p-4`}>
           <ActionForm action={saveService} lang={lang} className="contents" messageClassName="col-span-full">
             <input type="hidden" name="id" value="" />
             <label className="block">
-              <span className="label">{t.namePt}</span>
-              <input name="name_pt" required maxLength={80} className="input mt-1.5 sm:mt-0" />
+              <span className="label lg:hidden">{t.namePt}</span>
+              <input name="name_pt" required maxLength={80} className="input mt-1.5 lg:mt-0" />
             </label>
             <label className="block">
-              <span className="label">{t.nameEn}</span>
-              <input name="name_en" required maxLength={80} className="input mt-1.5 sm:mt-0" />
+              <span className="label lg:hidden">{t.nameEn}</span>
+              <input name="name_en" required maxLength={80} className="input mt-1.5 lg:mt-0" />
             </label>
             <label className="block">
-              <span className="label">{t.duration}</span>
+              <span className="label lg:hidden">{t.duration}</span>
               <input
                 name="duration_minutes"
                 type="number"
@@ -171,7 +167,7 @@ export default async function AdminSchedule({
                 max={600}
                 step={5}
                 required
-                className="input mt-1.5 sm:mt-0"
+                className="input mt-1.5 lg:mt-0"
               />
             </label>
             <label className="flex items-center gap-2 text-sm">
@@ -225,6 +221,6 @@ export default async function AdminSchedule({
         </ActionForm>
       </section>
 
-    </main>
+    </>
   );
 }

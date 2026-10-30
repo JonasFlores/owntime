@@ -1,16 +1,12 @@
 /**
  * Route-level skeleton for the admin area: a calm pulse in the app's own
- * calendar shape (tab strip + month grid) so navigation never feels frozen.
+ * calendar shape so navigation never feels frozen. The tab strip belongs to
+ * the persistent layout and must not be replaced during page transitions.
  * No text — language is decided by the page, not the loading state.
  */
 export default function Loading() {
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 pt-12 pb-16 sm:px-6" aria-busy="true">
-      <nav className="flex flex-wrap items-center gap-x-5 gap-y-3" aria-hidden="true">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="skeleton h-4 w-20" />
-        ))}
-      </nav>
+    <div aria-busy="true">
       <div className="mt-10 overflow-hidden rounded-2xl border border-line">
         <div className="grid grid-cols-7 gap-px bg-line">
           {Array.from({ length: 7 }).map((_, i) => (
@@ -27,6 +23,6 @@ export default function Loading() {
           ))}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

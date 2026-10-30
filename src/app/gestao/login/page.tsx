@@ -35,7 +35,7 @@ export default async function LoginPage({
           <input name="email" type="email" required className="input mt-2" autoComplete="email" />
         </label>
         <label className="block">
-          <span className="label">********</span>
+          <span className="label">{t.password}</span>
           <input name="password" type="password" required className="input mt-2" autoComplete="current-password" />
         </label>
         <SubmitButton className="btn btn-primary mt-1 w-full">{t.loginBtn}</SubmitButton>

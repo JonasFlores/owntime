@@ -5,11 +5,54 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 
 const GOOGLE_API = "https://www.googleapis.com/calendar/v3";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_CALLBACK_PATH = "/api/integrations/google/callback";
+const GOOGLE_TIMEOUT_MS = 15_000;
+
+const withTimeout = (signal?: AbortSignal | null) =>
+  signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(GOOGLE_TIMEOUT_MS)])
+    : AbortSignal.timeout(GOOGLE_TIMEOUT_MS);
+
+/**
+ * Redirect URIs registered in the Google Cloud console. Accepts a single
+ * `GOOGLE_OAUTH_REDIRECT_URI` and/or a comma-separated
+ * `GOOGLE_OAUTH_REDIRECT_URIS` list (e.g. localhost, tunnel and production).
+ */
+export function googleRedirectUris() {
+  return [process.env.GOOGLE_OAUTH_REDIRECT_URIS, process.env.GOOGLE_OAUTH_REDIRECT_URI]
+    .filter((value): value is string => Boolean(value))
+    .join(",")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => {
+      try {
+        return new URL(value).pathname === GOOGLE_CALLBACK_PATH;
+      } catch {
+        return false;
+      }
+    })
+    .filter((value, index, list) => list.indexOf(value) === index);
+}
+
+/**
+ * Pick the redirect URI for this request. The exact origin wins; otherwise a
+ * configured URI with the same host is reused so scheme differences (for
+ * example an `https://localhost` request while only `http://localhost` is
+ * registered) do not trigger Google's `redirect_uri_mismatch`.
+ */
+export function resolveGoogleRedirectUri(origin: string) {
+  const derived = new URL(GOOGLE_CALLBACK_PATH, origin).toString();
+  const configured = googleRedirectUris();
+  if (configured.includes(derived)) return derived;
+  const { host } = new URL(derived);
+  const sameHost = configured.find((uri) => new URL(uri).host === host);
+  return sameHost ?? derived;
+}
 
 export const googleConfigured = Boolean(
   process.env.GOOGLE_CLIENT_ID &&
     process.env.GOOGLE_CLIENT_SECRET &&
-    process.env.GOOGLE_OAUTH_REDIRECT_URI &&
+    googleRedirectUris().length &&
     process.env.GOOGLE_TOKEN_ENCRYPTION_KEY &&
     process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
@@ -74,7 +117,7 @@ function decryptGoogleToken(value: string) {
 function oauthConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
+  const redirectUri = googleRedirectUris()[0];
   if (!clientId || !clientSecret || !redirectUri) throw new Error("google-oauth-not-configured");
   return { clientId, clientSecret, redirectUri };
 }
@@ -114,6 +157,7 @@ export async function exchangeGoogleCode(code: string, redirectUri?: string) {
       grant_type: "authorization_code",
     }),
     cache: "no-store",
+    signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
   });
   const body = (await response.json()) as { access_token?: string; refresh_token?: string; error?: string };
   if (!response.ok || !body.access_token || !body.refresh_token) {
@@ -140,6 +184,7 @@ async function accessToken(connectionId: string, db = getAdminSupabase()) {
       grant_type: "refresh_token",
     }),
     cache: "no-store",
+    signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
   });
   const body = (await response.json()) as { access_token?: string; error?: string };
   if (!response.ok || !body.access_token) {
@@ -161,6 +206,7 @@ async function googleRequest<T>(connectionId: string, path: string, init: Reques
       ...init.headers,
     },
     cache: "no-store",
+    signal: withTimeout(init.signal),
   });
   if (response.status === 204) return null as T;
   const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } } & T;
@@ -267,7 +313,8 @@ export async function syncGoogleConnection(connectionId: string, retryFull = tru
 
   try {
     const fullSync = !connection.sync_token;
-    if (fullSync) await db.from("google_busy_events").delete().eq("connection_id", connectionId);
+    // Keep the previous snapshot available until a complete full sync succeeds.
+    const syncStartedAt = new Date().toISOString();
     let pageToken: string | undefined;
     let nextSyncToken: string | undefined;
     do {
@@ -335,7 +382,7 @@ export async function syncGoogleConnection(connectionId: string, retryFull = tru
             ...range,
             google_etag: event.etag ?? null,
             google_updated_at: event.updated ?? null,
-            last_seen_at: new Date().toISOString(),
+            last_seen_at: syncStartedAt,
           },
           { onConflict: "connection_id,google_event_id" },
         );
@@ -343,6 +390,15 @@ export async function syncGoogleConnection(connectionId: string, retryFull = tru
       pageToken = result.nextPageToken;
       nextSyncToken = result.nextSyncToken ?? nextSyncToken;
     } while (pageToken);
+
+    if (fullSync) {
+      const { error: cleanupError } = await db
+        .from("google_busy_events")
+        .delete()
+        .eq("connection_id", connectionId)
+        .lt("last_seen_at", syncStartedAt);
+      if (cleanupError) throw cleanupError;
+    }
 
     const now = new Date().toISOString();
     await db
@@ -464,18 +520,16 @@ export async function processGoogleSyncJobs(limit = 25) {
   const { data: connectionRow } = await db.from("google_calendar_connections").select("*").limit(1).maybeSingle();
   if (!connectionRow) return { processed: 0 };
   const connection = connectionRow as GoogleConnection;
-  const { data: jobs } = await db
-    .from("calendar_sync_jobs")
-    .select("id,appointment_id,operation,attempts")
-    .is("processed_at", null)
-    .lte("next_attempt_at", new Date().toISOString())
-    .order("created_at")
-    .limit(limit);
+  const { data: jobs, error: claimError } = await db.rpc("claim_calendar_sync_jobs", { p_limit: limit });
+  if (claimError) throw claimError;
   let processed = 0;
   for (const job of jobs ?? []) {
     try {
       await syncAppointment(db, connection, job.appointment_id, job.operation);
-      await db.from("calendar_sync_jobs").update({ processed_at: new Date().toISOString(), last_error: null }).eq("id", job.id);
+      await db
+        .from("calendar_sync_jobs")
+        .update({ processed_at: new Date().toISOString(), processing_started_at: null, last_error: null })
+        .eq("id", job.id);
       processed++;
     } catch (error) {
       const attempts = Number(job.attempts) + 1;
@@ -484,6 +538,7 @@ export async function processGoogleSyncJobs(limit = 25) {
         .from("calendar_sync_jobs")
         .update({
           attempts,
+          processing_started_at: null,
           last_error: error instanceof Error ? error.message.slice(0, 500) : "sync-failed",
           next_attempt_at: new Date(Date.now() + delayMinutes * 60_000).toISOString(),
         })

@@ -3,26 +3,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getLang } from "@/lib/lang";
 import { dict } from "@/lib/i18n";
+import LanguageSwitcher from "@/components/language-switcher";
 
 export const metadata: Metadata = {
-  title: "Owntime · Agenda",
-  description: "Faça sua reserva online — choose a time, we confirm it.",
+  title: "OWNTIME",
+  description: "Agendamento online simples e seguro.",
+  applicationName: "OWNTIME",
+  manifest: "/manifest.webmanifest",
 };
-
-/** Plain <a> so middleware can intercept ?lang= and set the cookie. */
-function LangLink({ target, cur, children }: { target: "pt" | "en"; cur: string; children: string }) {
-  return (
-    <a
-      href={`?lang=${target}`}
-      aria-current={cur === target ? "true" : undefined}
-      className={
-        cur === target ? "font-medium text-ink underline-offset-4" : "text-soft hover:text-ink"
-      }
-    >
-      {children}
-    </a>
-  );
-}
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const lang = await getLang();
@@ -34,11 +22,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Link href="/" className="font-serif text-lg tracking-wide">
             {t.brand}
           </Link>
-          <nav className="flex items-center gap-2 text-sm" aria-label="Language">
-            <LangLink target="pt" cur={lang}>PT</LangLink>
-            <span className="text-line">·</span>
-            <LangLink target="en" cur={lang}>EN</LangLink>
-          </nav>
+          <LanguageSwitcher lang={lang} />
         </header>
         <div className="flex-1">{children}</div>
         <footer className="mx-auto w-full max-w-4xl px-4 pt-16 pb-10 text-xs text-soft sm:px-6">

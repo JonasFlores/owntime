@@ -94,7 +94,7 @@ export default function ConfirmDelete({
 
       {result?.ok && (
         <p role="status" className="absolute top-full mt-1 whitespace-nowrap text-xs text-accent">
-          {t.msgDeleted}
+          {result.code === "archived" ? t.msgArchived : t.msgDeleted}
         </p>
       )}
     </div>

@@ -4,7 +4,6 @@ import { getLang } from "@/lib/lang";
 import { dict } from "@/lib/i18n";
 import { BOOKING_TZ } from "@/lib/tz";
 import type { AppointmentRow } from "@/lib/booking";
-import AdminNav from "@/components/admin-nav";
 import SetupNotice from "@/components/setup-notice";
 import BookingsCalendar from "@/components/bookings-calendar";
 import PendingInbox from "@/components/pending-inbox";
@@ -19,11 +18,10 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
 
   if (!isConfigured)
     return (
-      <main className="mx-auto w-full max-w-4xl px-4 pt-12 pb-8 sm:px-6">
-        <AdminNav t={t} lang={lang} active={pendingView ? "pending" : "bookings"} />
+      <>
         <h1 className="mt-10 font-serif text-3xl">{t.tabBookings}</h1>
         <SetupNotice />
-      </main>
+      </>
     );
 
   const { sb } = await requireAdmin(); // redirect anonymous visitors before any calendar renders
@@ -34,18 +32,16 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
   ]);
   const hours = hoursResult.data;
   const pending = (pendingResult.data ?? []) as unknown as AppointmentRow[];
-  const pendingCount = pendingResult.count ?? pending.length;
   const openDows = new Set((hours ?? []).filter((x) => x.open).map((x) => x.day_of_week));
   const closedDows = [0, 1, 2, 3, 4, 5, 6].filter((dow) => !openDows.has(dow));
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 pt-12 pb-16 sm:px-6">
-      <AdminNav t={t} lang={lang} active={pendingView ? "pending" : "bookings"} pendingCount={pendingCount} />
+    <>
       {pendingView ? (
         <PendingInbox items={pending} lang={lang} t={t} tz={BOOKING_TZ} />
       ) : (
         <BookingsCalendar lang={lang} tz={BOOKING_TZ} initialMonth={initialMonth} closedDows={closedDows} />
       )}
-    </main>
+    </>
   );
 }

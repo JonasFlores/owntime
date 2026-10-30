@@ -69,6 +69,7 @@ async function sendEmail(mail: Mail): Promise<boolean> {
         html: mail.html,
         ...(mail.replyTo ? { reply_to: mail.replyTo } : {}),
       }),
+      signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) {
       console.error("[email] Resend rejected message", response.status, await response.text());

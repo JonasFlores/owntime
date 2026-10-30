@@ -4,10 +4,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getSupabase, isConfigured } from "@/lib/supabase";
 import { atTz, dayBounds } from "@/lib/tz";
-import { normTime, isCoherentWindow } from "@/lib/time";
+import { normTime, isCoherentWindow, resolveAppointmentWindow } from "@/lib/time";
 import { requireAdmin } from "@/lib/admin";
 import { sendBookingApproved } from "@/lib/email";
 import { enqueueAppointmentSync } from "@/lib/google-calendar";
+import { isIsoDate } from "@/lib/validation";
 
 /** Every admin form action resolves to this state (useActionState pattern). */
 export type AdminResult = { ok: boolean; code?: string; detail?: string };
@@ -107,32 +108,22 @@ export async function saveService(_prev: AdminResult | null, fd: FormData): Prom
   return error ? fail(error.message) : ok("saved");
 }
 
-/** Delete a service and cascade its appointments. Approved, upcoming
- *  appointments are unlinked from Google Calendar before their rows go. */
+/** Preserve booking history: services already used are archived, never cascaded. */
 export async function deleteService(_prev: AdminResult | null, fd: FormData): Promise<AdminResult> {
   const { sb } = await requireAdmin();
   const id = z.string().uuid().safeParse(fd.get("id"));
   if (!id.success) return fail("Invalid id");
 
-  const { data: appts, error: readError } = await sb
+  const { count, error: readError } = await sb
     .from("appointments")
-    .select("id,status,starts_at")
+    .select("id", { count: "exact", head: true })
     .eq("service_id", id.data);
   if (readError) return fail(readError.message);
-
-  const now = Date.now();
-  const upcomingApproved = (appts ?? []).filter(
-    (a) => a.status === "approved" && new Date(a.starts_at).getTime() >= now,
-  );
-  for (const a of upcomingApproved) await enqueueAppointmentSync(a.id, "delete");
-
-  /* The FK to services has no ON DELETE cascade — and we want it manual, so
-     the calendar sync above stays in control. Delete the bookings first. */
-  const { error: apptError } = await sb.from("appointments").delete().eq("service_id", id.data);
-  if (apptError) return fail(apptError.message);
-
-  const { error } = await sb.from("services").delete().eq("id", id.data);
-  return error ? fail(error.message) : ok("deleted");
+  const query = count
+    ? sb.from("services").update({ active: false }).eq("id", id.data)
+    : sb.from("services").delete().eq("id", id.data);
+  const { error } = await query;
+  return error ? fail(error.message) : ok(count ? "archived" : "deleted");
 }
 
 /* ---------- weekly working hours ---------- */
@@ -159,17 +150,12 @@ export async function saveHours(_prev: AdminResult | null, fd: FormData): Promis
 
 /* ---------- time off: lock days & periods ---------- */
 
-const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
-
-const nextDayIso = (date: string) =>
-  new Date(new Date(`${date}T12:00:00Z`).getTime() + 86400000).toISOString().slice(0, 10);
-
 /** Full-day block toggle. Note text is optional, editable later from the dashboard. */
 export async function toggleDayLock(_prev: AdminResult | null, fd: FormData): Promise<AdminResult> {
   const { sb } = await requireAdmin();
   const date = String(fd.get("date") || "");
   const note = String(fd.get("note") || "").trim().slice(0, 200) || null;
-  if (!isDate(date)) return fail("Invalid date");
+  if (!isIsoDate(date)) return fail("Invalid date");
   const b = dayBounds(date);
   const { data: existing } = await sb
     .from("time_off")
@@ -192,7 +178,7 @@ export async function saveLock(_prev: AdminResult | null, fd: FormData): Promise
   const start = normTime(String(fd.get("start") || ""));
   const end = normTime(String(fd.get("end") || ""));
   const note = String(fd.get("note") || "").trim().slice(0, 200) || null;
-  if (!isDate(date) || !isCoherentWindow(start, end)) return fail("Invalid period");
+  if (!isIsoDate(date) || !isCoherentWindow(start, end)) return fail("Invalid period");
   const starts_at = atTz(date, start);
   const ends_at = atTz(date, end);
   if (ends_at <= starts_at) return fail("End must be after start");
@@ -222,7 +208,7 @@ export async function removeLock(_prev: AdminResult | null, fd: FormData): Promi
 
 const apptSchema = z.object({
   id: z.string().uuid(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().refine(isIsoDate),
   start: z.string().min(3).max(8),
 });
 
@@ -243,28 +229,21 @@ export async function updateAppointment(_prev: AdminResult | null, fd: FormData)
 
   const start = normTime(parsed.data.start);
   if (!start) return fail("Invalid start time");
-  let end = normTime(String(fd.get("end") || ""));
-  let date = parsed.data.date;
+  const end = normTime(String(fd.get("end") || ""));
+  let duration: number | undefined;
   if (!isCoherentWindow(start, end)) {
-    // blank end → fall back to the service duration; crossing midnight rolls the end date
     if (end && end !== "00:00") return fail("End must be after start");
     const { data: appt } = await sb
       .from("appointments")
       .select("id,services(duration_minutes)")
       .eq("id", parsed.data.id)
       .maybeSingle();
-    const dur = (appt as { services?: { duration_minutes?: number } | null } | null)?.services?.duration_minutes;
-    if (!dur) return fail("End must be after start");
-    const [h, m] = start.split(":").map(Number);
-    let eMin = h * 60 + m + dur;
-    if (eMin >= 1440) {
-      date = nextDayIso(date);
-      eMin -= 1440;
-    }
-    end = `${String(Math.floor(eMin / 60)).padStart(2, "0")}:${String(eMin % 60).padStart(2, "0")}`;
+    duration = (appt as { services?: { duration_minutes?: number } | null } | null)?.services?.duration_minutes;
   }
-  const starts_at = atTz(date, start);
-  const ends_at = atTz(date, end);
+  const window = resolveAppointmentWindow(parsed.data.date, start, end, duration);
+  if (!window) return fail("End must be after start");
+  const starts_at = atTz(window.startDate, window.start);
+  const ends_at = atTz(window.endDate, window.end);
   const { error } = await sb
     .from("appointments")
     .update({

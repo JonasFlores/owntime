@@ -2,10 +2,7 @@
 
 import { useState } from "react";
 import { dict, type Lang } from "@/lib/i18n";
-
-/** Shared between the filter table and the "new service" row. */
-export const GRID =
-  "grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1.15fr)_5rem_5rem_5.5rem_6rem_6.5rem] sm:items-center";
+import { SERVICE_GRID } from "@/lib/service-grid";
 
 export type Show = "all" | "active" | "inactive";
 
@@ -74,7 +71,7 @@ export default function ServicesFilter({
       </div>
 
       {/* table header — aligned to the same grid as the rows below */}
-      <div className={`${GRID} mt-4 px-4 py-2.5 max-sm:hidden`}>
+      <div className={`${SERVICE_GRID} mt-4 px-4 py-2.5 max-lg:hidden`}>
         <span className="label">{t.namePt}</span>
         <span className="label">{t.nameEn}</span>
         <span className="label">{t.duration}</span>

@@ -1,10 +1,10 @@
-import AdminNav from "@/components/admin-nav";
 import { requireAdmin } from "@/lib/admin";
 import { getLang } from "@/lib/lang";
-import { dict } from "@/lib/i18n";
 import { googleConfigured, listGoogleCalendars, type GoogleConnection } from "@/lib/google-calendar";
 import { disconnectGoogle, selectGoogleCalendar, syncGoogleNow } from "./actions";
 import SubmitButton from "@/components/submit-button";
+import SetupNotice from "@/components/setup-notice";
+import { isConfigured } from "@/lib/supabase";
 
 const notices: Record<string, { pt: string; en: string }> = {
   connected: { pt: "Google Agenda conectado e sincronizado.", en: "Google Calendar connected and synchronized." },
@@ -18,24 +18,27 @@ const notices: Record<string, { pt: string; en: string }> = {
 
 export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ google?: string }> }) {
   const lang = await getLang();
-  const t = dict[lang];
+  if (!isConfigured) {
+    return (
+      <section className="mt-12">
+        <h1 className="font-serif text-3xl">Google Agenda</h1>
+        <SetupNotice />
+      </section>
+    );
+  }
   const { sb } = await requireAdmin();
   const params = await searchParams;
-  const [connectionResult, pendingResult] = await Promise.all([
-    sb
-      .from("google_calendar_connections")
-      .select("id,calendar_id,calendar_name,calendar_timezone,google_account_email,sync_token,channel_id,channel_resource_id,channel_expires_at,status,last_synced_at,last_error")
-      .limit(1)
-      .maybeSingle(),
-    sb.from("appointments").select("id", { count: "exact", head: true }).eq("status", "pending"),
-  ]);
+  const connectionResult = await sb
+    .from("google_calendar_connections")
+    .select("id,calendar_id,calendar_name,calendar_timezone,google_account_email,sync_token,channel_id,channel_resource_id,channel_expires_at,status,last_synced_at,last_error")
+    .limit(1)
+    .maybeSingle();
   const connection = connectionResult.data as GoogleConnection | null;
   const calendars = connection ? await listGoogleCalendars(connection.id).catch(() => []) : [];
   const notice = params.google ? notices[params.google]?.[lang] : null;
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 pt-12 pb-16 sm:px-6">
-      <AdminNav t={t} lang={lang} active="integrations" pendingCount={pendingResult.count ?? 0} />
+    <>
       <section className="mt-12">
         <p className="label">{lang === "pt" ? "Integrações" : "Integrations"}</p>
         <h1 className="mt-2 font-serif text-3xl">Google Agenda</h1>
@@ -108,6 +111,6 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           </div>
         )}
       </section>
-    </main>
+    </>
   );
 }
