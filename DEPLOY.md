@@ -7,11 +7,13 @@ Current flow (2025/2026): hPanel no longer uses the old Passenger "Advanced → 
 1. **hPanel → Websites → Add Website → Node.js web app**
    - Source: **Connect with GitHub** (auto-deploys every push to your branch)
    - Hostinger auto-detects Next.js; confirm:
-     - Node.js version: **20 or 22** (Next.js 15 needs ≥ 20)
+      - Node.js version: **22.12 or newer**
      - Build command: `build` · Output directory: `.next` (do not change)
 2. **Environment variables** (hPanel, Node app → Environment variables) — set before first build since `NEXT_PUBLIC_*` get baked in:
-   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `APPOINTMENT_TIMEZONE`, `NODE_ENV=production`
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+   - `APPOINTMENT_TIMEZONE`, `BOOKING_RATE_LIMIT_SECRET`, `NODE_ENV=production`
    - Email: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ADMIN_NOTIFICATION_EMAILS`
+   - Google: all `GOOGLE_*` variables and `CRON_SECRET` documented in `.env.example`
 3. Deploy and watch the **Deployments** build log.
 
 ## Good to know
@@ -28,7 +30,8 @@ Current flow (2025/2026): hPanel no longer uses the old Passenger "Advanced → 
 
 - [ ] GitHub repo connected in hPanel
 - [ ] Env vars saved (project redeploys on save)
-- [ ] Supabase project created + `supabase/schema.sql` executed in the SQL editor
-- [ ] Admin(s) signed up on `/gestao/login` and inserted into `admin_users`
+- [ ] New Supabase project: `supabase/schema.sql` executed; existing project: every `supabase/migrations/*.sql` applied in order
+- [ ] Admin user created in Supabase Auth and inserted into `admin_users`
+- [ ] `npm run check` and `npm audit` pass on Node 22.12+
 - [ ] Test booking → approve → verify slot becomes unavailable
 - [ ] Test booking → admin alert email → approve → customer confirmation email

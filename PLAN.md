@@ -7,7 +7,7 @@ Public booking site + small admin team, running on Hostinger Cloud Startup, back
 | Layer | Choice | Why |
 |---|---|---|
 | Framework | **Next.js (App Router)** — latest stable | One app for public site + admin; server components + server actions remove the need for a separate API layer |
-| Runtime | **Node.js 20+ (LTS)** via Passenger on Hostinger | Matches Node LTS supported by Next |
+| Runtime | **Node.js 22.12+ (LTS)** on Hostinger | Required by the production and quality toolchain |
 | Styling | **Tailwind CSS** | Small output, widely tested; no component framework beyond what's needed |
 | Database / Auth / Email-hooks | **Supabase** (free tier is enough to start) | Postgres + Auth + Row Level Security out of the box |
 | DB client | `@supabase/supabase-js` + `@supabase/ssr` | Official, SSR-ready cookies-based auth |
@@ -34,7 +34,7 @@ Double-booking is prevented **at the database level** with a Postgres exclusion 
 
 ## 3. Roles & auth
 
-- **Public**: no login. Anonymous inserts allowed only on `appointments` with status `pending` and only via validated input + honeypot + rate limit.
+- **Public**: no login. The browser can read availability RPCs, but creation is accepted only by the Next.js server and a service-role-only hardened RPC.
 - **Admins (2–5)**: Supabase Auth (email + password). Membership in the `admin_users` table is what grants access — RLS checks `admin_users (user_id = auth.uid())`. A person who signs up but is not in the table sees nothing (RLS denies by default).
 
 ## 4. Data model (Supabase / Postgres)
@@ -62,7 +62,7 @@ WHERE (status IN ('pending','approved'));
 
 Everything else is enforced with **Row Level Security**:
 
-- Anyone (anon): may `insert` appointments as `pending` only; may read only services, working_hours, time_off, and taken slots (via an RPC, not raw rows).
+- Anyone (anon): may read active services and aggregated availability RPCs. Appointment and time-off rows are never exposed directly.
 - Admins: full read; may `update` only the decision fields; service/time management restricted to admins.
 - Slot computation happens in a Postgres function `get_available_slots(service_id, date, tz)` so the public site never sees guests' personal data.
 
@@ -79,14 +79,14 @@ Everything else is enforced with **Row Level Security**:
 
 ## 6. Security checklist
 
-- [ ] RLS enabled on every table, deny-by-default; policies reviewed
-- [ ] `SUPABASE_SERVICE_ROLE_KEY` used **only** in server-side code (never in client bundle), env vars only, `.env*` git-ignored
-- [ ] All inputs validated with zod server-side (server actions), phone number normalized
-- [ ] Anonymous request rate-limited (per phone + per IP, checked in DB) + honeypot field + min form-fill time
-- [ ] No personal data of guests exposed to public queries (RPC returns only busy slots)
-- [ ] HTTPS forced on Hostinger; admin session via Supabase Auth cookies (httpOnly)
+- [x] RLS enabled on every table, deny-by-default; policies reviewed
+- [x] `SUPABASE_SERVICE_ROLE_KEY` used **only** in server-side code (never in client bundle), env vars only, `.env*` git-ignored
+- [x] All booking inputs validated server-side and inside the database; phone number normalized
+- [x] Anonymous requests rate-limited transactionally by phone + HMAC network identifier, with honeypot and minimum fill time
+- [x] No personal data of guests exposed to public queries
+- [ ] HTTPS and production environment verified on Hostinger; admin cookies are refreshed by the Next.js proxy
 - [ ] GitHub: main protected (`master`/`main` requires PR + passing checks), secrets never committed
-- [ ] `npm audit` in CI; pinned dependency versions
+- [x] `npm audit`, lint, typecheck, unit tests and production build run in CI on Node 22
 
 ## 7. Building phases (each ends with a working, deployable state)
 

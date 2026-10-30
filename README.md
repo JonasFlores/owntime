@@ -12,7 +12,7 @@ See [`PLAN.md`](./PLAN.md) for the full plan, data model, security checklist and
 - [x] Phase 1 — Supabase backend (`supabase/schema.sql` — run it in the Supabase SQL editor)
 - [x] Phase 2 — public booking site (calendar → free days → times → request form, PT/EN)
 - [x] Phase 3 — admin dashboard (bookings, services, weekly hours, day/period blocks)
-- [~] Phase 4 — notifications implemented (Resend); rate-limit tuning and RLS review pending
+- [x] Phase 4 — notifications, transactional rate limits, RLS hardening and Google sync leases
 - [ ] Phase 5 — Hostinger deploy (see `DEPLOY.md`)
 
 ## Getting started (local)
@@ -23,7 +23,7 @@ cp .env.example .env.local   # fill in your Supabase URL + anon key
 npm run dev
 ```
 
-Then: run `supabase/schema.sql` in the Supabase SQL editor, sign up on `/gestao/login`,
+Use Node.js 22.12 or newer. Then run `supabase/schema.sql` in the Supabase SQL editor, create the admin in Supabase Auth,
 and add your `user_id` to `admin_users` (final step documented in the schema file).
 
 For email notifications, verify a sending domain in Resend and configure
@@ -35,8 +35,8 @@ The admin page `/gestao/integrations` connects one shared Google Calendar. Appro
 appointments are exported to Google; opaque Google events are imported as busy
 blocks and are included in public availability calculations.
 
-1. Re-run `supabase/schema.sql` to create the integration tables and update the
-   availability functions.
+1. For a new database, run `supabase/schema.sql`. For an existing database,
+   apply the files in `supabase/migrations/` in order instead of re-running the bootstrap.
 2. In Google Cloud, enable **Google Calendar API**, configure the OAuth consent
    screen, and create a **Web application** OAuth client.
 3. Add the exact callback URL as an authorized redirect URI, for example:
@@ -62,3 +62,13 @@ The cron renews expiring notification channels, performs incremental sync, and
 retries failed event exports. Never expose `SUPABASE_SERVICE_ROLE_KEY`,
 `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`, or `CRON_SECRET` to the
 browser.
+
+## Quality gate
+
+```bash
+npm run check
+npm audit
+```
+
+The CI workflow runs audit, lint, typecheck, 42 unit/contract tests and a production build on Node 22.
+See [`PRODUCTION_AUDIT.md`](./PRODUCTION_AUDIT.md) before promoting a staging deployment.
